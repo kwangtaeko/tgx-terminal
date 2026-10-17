@@ -1,0 +1,29 @@
+{
+  "name": "tgx-terminal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A PTY-based terminal wrapper for existing AI CLIs.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.15.1 <23",
+    "pnpm": ">=10.33.2"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "tgx": "node --enable-source-maps dist/cli.js"
+  },
+  "dependencies": {
+    "@xterm/headless": "6.0.0",
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
