@@ -1,7 +1,11 @@
-import type { Disposable } from "../session/contracts.js";
+import type { Disposable, TerminalSize } from "../session/contracts.js";
 
 export interface InputCapableTerminal {
   onInput(listener: (data: string) => void): Disposable;
+}
+
+export interface ResizableTerminal {
+  onResize(listener: (size: TerminalSize) => void): Disposable;
 }
 
 interface InputStream {
@@ -19,10 +23,12 @@ interface OutputStream {
   readonly columns?: number;
   readonly rows?: number;
   write(data: string): boolean;
+  on?(event: "resize", listener: () => void): void;
+  off?(event: "resize", listener: () => void): void;
 }
 
 /** Owns only the parent terminal state; child VT bytes are never written here. */
-export class ProcessTerminal implements InputCapableTerminal {
+export class ProcessTerminal implements InputCapableTerminal, ResizableTerminal {
   #entered = false;
   #rawModeBeforeEnter: boolean | undefined;
   #wasPausedBeforeEnter = false;
@@ -80,5 +86,15 @@ export class ProcessTerminal implements InputCapableTerminal {
 
     this.input.on("data", onData);
     return { dispose: () => this.input.off("data", onData) };
+  }
+
+  onResize(listener: (size: TerminalSize) => void): Disposable {
+    if (this.output.on === undefined || this.output.off === undefined) {
+      return { dispose() {} };
+    }
+
+    const onResize = (): void => listener(this.size);
+    this.output.on("resize", onResize);
+    return { dispose: () => this.output.off?.("resize", onResize) };
   }
 }

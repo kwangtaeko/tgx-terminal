@@ -2,6 +2,8 @@
 
 | 일시 | 명령 | 기대 결과 | 실제 결과 | 판정 |
 | --- | --- | --- | --- | --- |
+| 2026-10-18 | `pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build && git diff --check` | P1 Sidecar layout, safe dashboard view, renderer, resize integration verification | 13 files, 44 tests passed; typecheck/build exit 0; diff check clean | pass |
+| 2026-10-18 | `node dist/cli.js codex --version; node dist/cli.js claude --version` | Windows PTY launch and parent-terminal restoration smoke check after P1 | Codex `0.163.0` and Claude `2.1.302` exited 0; command runner was 80 columns, so the 92-column Sidecar visual scenario remains manual | pass with manual follow-up |
 | 2026-10-17 | `node --version` | Node 실행 가능 | `v22.15.1` | pass |
 | 2026-10-17 | `pnpm.cmd --version` | pnpm 실행 가능 | `10.33.2`; 사용자 `.npmrc`의 미설정 환경 변수 경고가 있었음 | pass with warning |
 | 2026-10-17 | `codex.cmd --version` | Codex CLI 실행 가능 | `codex-cli 0.163.0`; sandbox의 PATH alias 경고가 있었음 | pass with warning |
@@ -23,5 +25,12 @@
 | 2026-10-17 | `node dist/cli.js claude --version` | 실제 Claude Code의 PTY 시작·정상 종료·부모 터미널 복구 | `2.1.302 (Claude Code)`, exit 0 | pass (비대화형) |
 | 2026-10-17 | `pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build && git diff --check` | P0 자동 회귀·strict 검사·빌드·공백 오류 검사 | 8 files, 20 tests passed; typecheck/build exit 0; diff check clean | pass |
 | 2026-10-17 | `docs/manual-p0-validation.md` 작성 | 자동화할 수 없는 실제 대화형 P0 검사 절차 고정 | 한글 입력·붙여넣기·승인·Ctrl+C·resize·alternate screen·종료 복구의 수동 판정 기준 추가 | pending manual verification |
+| 2026-10-18 | `pnpm.cmd exec vitest run tests/unit/screen-model.test.ts && pnpm.cmd typecheck && pnpm.cmd exec vitest run && pnpm.cmd build` | 화면 잔상 회귀·현재 viewport 렌더링·전체 회귀·빌드 검사 | 화면 모델 3 tests passed; 전체 8 files, 21 tests passed; typecheck/build exit 0 | pass |
+| 2026-10-18 | `node dist/cli.js codex --version` | 화면 clear/home 프레임을 포함한 실제 PTY 출력 재검증 | `codex-cli 0.163.0`, exit 0; 이전 화면 잔상을 남길 수 있는 렌더 바이트는 출력하지 않음 | pass with warning |
+| 2026-10-18 | `pnpm.cmd exec vitest run tests/unit/screen-model.test.ts && pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build` | palette·RGB·기본 스타일의 VT 화면 스냅샷과 안전한 ANSI 재렌더링 검증 | 화면 모델 4 tests passed; 전체 8 files, 22 tests passed; typecheck/build exit 0 | pass |
+| 2026-10-18 | `pnpm.cmd exec vitest run tests/unit/screen-model.test.ts && pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build` | 첫 프레임 전체 렌더링 뒤 변경 행만 다시 그리는 회귀 검증 | 화면 모델 5 tests passed; 전체 8 files, 23 tests passed; typecheck/build exit 0 | pass |
+| 2026-10-18 | `node dist/cli.js codex --version` | 실제 PTY 출력이 첫 프레임 뒤 행 단위 ANSI 갱신을 사용하는지 확인 | `codex-cli 0.163.0`, exit 0; 첫 `2J` 이후 변경 행에만 `2K` 출력 | pass with warning |
+| 2026-10-18 | `pnpm.cmd exec vitest run tests/unit/screen-model.test.ts tests/unit/terminal-state.test.ts tests/integration/cli-lifecycle.test.ts` | 부모 터미널 resize → VT 화면 모델·PTY 전달, 행 수 변경 전체 재도색 검증 | 3 files, 14 tests passed | pass |
+| 2026-10-18 | `pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build && git diff --check` | 공급자 상태 계약·미지원 사용량 어댑터·출처 메타데이터 검증 | 10 files, 33 tests passed; typecheck/build exit 0; diff check clean | pass |
 
 실제 공급자 CLI의 비대화형 시작·정상 종료·복구는 확인했습니다. 한글 입력, 여러 줄 붙여넣기, 승인 메뉴, Ctrl+C, resize, alternate screen을 포함한 대화형 공급자 검증은 아직 실행하지 않았습니다.

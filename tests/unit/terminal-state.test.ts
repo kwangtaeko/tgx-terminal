@@ -42,4 +42,32 @@ describe("ProcessTerminal", () => {
       "pause"
     ]);
   });
+
+  it("reports the current terminal dimensions when the output resizes", () => {
+    let resizeListener: (() => void) | undefined;
+    const input = {
+      resume: () => undefined,
+      on: () => undefined,
+      off: () => undefined
+    };
+    const output = {
+      columns: 80,
+      rows: 24,
+      write: () => true,
+      on: (event: "resize", listener: () => void) => {
+        if (event === "resize") resizeListener = listener;
+      },
+      off: () => undefined
+    };
+    const terminal = new ProcessTerminal(input, output);
+    const sizes: Array<{ columns: number; rows: number }> = [];
+
+    const subscription = terminal.onResize((size) => sizes.push(size));
+    output.columns = 120;
+    output.rows = 40;
+    resizeListener?.();
+    subscription.dispose();
+
+    expect(sizes).toEqual([{ columns: 120, rows: 40 }]);
+  });
 });

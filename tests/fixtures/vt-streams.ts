@@ -1,5 +1,6 @@
 export const FIXTURE_CURSOR_AND_ERASE = "first line\r\u001b[2Ksecond line";
 export const FIXTURE_COLOURS = "\u001b[31mRED\u001b[0m";
+export const FIXTURE_STYLED_COLOURS = "\u001b[31mRED\u001b[0m \u001b[1;4;38;2;1;2;3mX\u001b[0m";
 export const FIXTURE_KOREAN = "한글 입력";
 export const FIXTURE_OSC_TITLE = "\u001b]2;untrusted title\u0007";
 export const FIXTURE_OSC_CLIPBOARD = "\u001b]52;c;untrusted clipboard\u001b\\";
