@@ -2,6 +2,7 @@
 
 | 일시 | 명령 | 기대 결과 | 실제 결과 | 판정 |
 | --- | --- | --- | --- | --- |
+| 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/tab-mode-arguments.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | `--tgx-tabs` 래퍼 인자와 provider passthrough 분리 검증 | 인자 parser 4개 테스트 및 전체 16개 파일·65개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; 제어면 연결은 후속 단계 |
 | 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/tab-control-decoder.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | opt-in 탭 prefix 디코더의 pass-through·명령·분할 입력·미완성 prefix 검증 | 디코더 5개 테스트 및 전체 15개 파일·61개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; `runCli` 연결 및 실제 terminal 제어면은 pending manual verification |
 | 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/multi-session-manager.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P3 다중 세션 코어의 입력·출력 격리, resize, 종료·오류 정리 검증 | 다중 세션 12개 테스트 및 전체 14개 파일·56개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; 실제 다중 탭 제어면은 pending manual verification |
 | 2026-10-24 | `node --version; pnpm.cmd --version; codex.cmd --version; claude --version; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P2 출처 메타데이터 재검증 | Node `v22.15.1`, pnpm `10.33.2`, Codex `0.164.0`, Claude `2.1.302`; 13 files, 44 tests passed; typecheck/build exit 0; `git diff --check` clean | pass with `.npmrc` `NODE_AUTH_TOKEN` warning |
