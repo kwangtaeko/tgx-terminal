@@ -122,11 +122,29 @@ describe("runCli", () => {
     expect(screen.writes).toEqual(["child output"]);
     expect(terminal.frames).toEqual(["child-only frame"]);
   });
+
+  it("creates and closes opt-in tabs without changing the default provider arguments", async () => {
+    const events: string[] = [];
+    const sessions = [new ControlledSession(events), new ControlledSession(events)];
+    const terminal = new ScriptedInputTerminal(events, "\u0014n\u0014x\u0014x");
+    const firstSession = sessions[0];
+    if (firstSession === undefined) throw new Error("Missing first session");
+    const dependencies = createDependencies(events, firstSession, undefined, terminal);
+    dependencies.createSession = () => {
+      const session = sessions.shift();
+      if (session === undefined) throw new Error("Unexpected session");
+      return session;
+    };
+
+    await expect(runCli(["codex", "--tgx-tabs", "--model", "gpt test"], dependencies)).resolves.toBe(0);
+
+    expect(events.filter((event) => event === "session.close")).toHaveLength(2);
+  });
 });
 
 function createDependencies(
   events: string[],
-  session: FakeSession,
+  session: CliSession,
   createSession: ((launch: ChildLaunch, size: TerminalSize) => CliSession) | undefined = () => session,
   terminal: ParentTerminal = new FakeTerminal(events),
   screen: FakeScreenModel = new FakeScreenModel()
@@ -234,5 +252,29 @@ class RecordingTerminal extends FakeTerminal {
 
   override async render(frame: string): Promise<void> {
     this.frames.push(frame);
+  }
+}
+
+class ScriptedInputTerminal extends FakeTerminal {
+  constructor(events: string[], private readonly script: string) {
+    super(events);
+  }
+
+  onInput(listener: (data: string) => void): Disposable {
+    queueMicrotask(() => listener(this.script));
+    return { dispose() {} };
+  }
+}
+
+class ControlledSession implements CliSession {
+  constructor(private readonly events: string[]) {}
+
+  onData(_listener: (data: string) => void): Disposable { return { dispose() {} }; }
+  onExit(_listener: (exit: SessionExit) => void): Disposable { return { dispose() {} }; }
+  write(_data: string): void {}
+  resize(_size: TerminalSize): void {}
+  async close(): Promise<SessionExit> {
+    this.events.push("session.close");
+    return { exitCode: 0 };
   }
 }

@@ -57,6 +57,7 @@ const MAX_QUEUED_OUTPUT_CHUNKS = 512;
 /** Owns isolated PTY and VT-screen pairs without deciding any terminal key bindings. */
 export class MultiSessionManager {
   readonly #sessions = new Map<string, SessionRecord>();
+  readonly #changeListeners = new Set<() => void>();
   readonly #maximumSessions: number;
   readonly #maximumQueuedOutputBytes: number;
   readonly #createSession: MultiSessionDependencies["createSession"];
@@ -82,6 +83,11 @@ export class MultiSessionManager {
 
   get selectedSessionId(): string | undefined {
     return this.#selectedSessionId;
+  }
+
+  onChange(listener: () => void): Disposable {
+    this.#changeListeners.add(listener);
+    return { dispose: () => this.#changeListeners.delete(listener) };
   }
 
   async create(launch: ChildLaunch): Promise<string> {
@@ -118,6 +124,7 @@ export class MultiSessionManager {
       if (record.released) record.exitSubscription.dispose();
       this.#nextId += 1;
       if (this.#selectedSessionId === undefined && record.status === "running") this.#selectedSessionId = id;
+      this.#notifyChange();
       return id;
     } catch (error) {
       if (record !== undefined) this.#releaseSubscriptions(record);
@@ -140,6 +147,7 @@ export class MultiSessionManager {
   select(id: string): void {
     if (!this.#sessions.has(id)) throw new Error(`Unknown session: ${id}`);
     this.#selectedSessionId = id;
+    this.#notifyChange();
   }
 
   writeSelected(data: string): void {
@@ -162,6 +170,7 @@ export class MultiSessionManager {
         this.#markError(record);
       }
     }
+    this.#notifyChange();
   }
 
   async flush(): Promise<void> {
@@ -217,6 +226,7 @@ export class MultiSessionManager {
     if (record.status !== "error") record.status = "exited";
     this.#releaseSubscriptions(record);
     if (this.#selectedSessionId === record.id) this.#selectedSessionId = this.#firstRunningId();
+    this.#notifyChange();
   }
 
   async #closeRecord(record: SessionRecord): Promise<SessionExit | undefined> {
@@ -233,12 +243,14 @@ export class MultiSessionManager {
       record.screen.dispose?.();
       this.#sessions.delete(record.id);
       if (this.#selectedSessionId === record.id) this.#selectedSessionId = this.#firstRunningId();
+      this.#notifyChange();
     }
   }
 
   #settleOutput(record: SessionRecord, bytes: number): void {
     record.pendingOutputBytes -= bytes;
     record.pendingOutputChunks -= 1;
+    this.#notifyChange();
   }
 
   #stopAcceptingOutput(record: SessionRecord): void {
@@ -249,6 +261,13 @@ export class MultiSessionManager {
   #markError(record: SessionRecord): void {
     if (record.status !== "exited") record.status = "error";
     this.#stopAcceptingOutput(record);
+    this.#notifyChange();
+  }
+
+  #notifyChange(): void {
+    for (const listener of this.#changeListeners) {
+      try { listener(); } catch { /* Rendering observers must never affect session ownership. */ }
+    }
   }
 
   #releaseSubscriptions(record: SessionRecord): void {

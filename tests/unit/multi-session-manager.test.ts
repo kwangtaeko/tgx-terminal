@@ -196,6 +196,21 @@ describe("MultiSessionManager", () => {
     expect(manager.get(failingId)?.status).toBe("error");
     expect(healthy.resizes).toEqual([{ columns: 120, rows: 40 }]);
   });
+
+  it("notifies changes without letting a listener interrupt session work", async () => {
+    const session = new FakeSession();
+    const manager = createManager([session]);
+    const changes: number[] = [];
+    manager.onChange(() => changes.push(changes.length));
+    manager.onChange(() => { throw new Error("render unavailable"); });
+
+    const id = await manager.create(launch("first"));
+    session.emitData("output");
+    await manager.flush();
+    manager.select(id);
+
+    expect(changes.length).toBeGreaterThanOrEqual(3);
+  });
 });
 
 function createManager(

@@ -3,11 +3,14 @@ import { pathToFileURL } from "node:url";
 
 import { buildChildLaunch } from "./launch/command.js";
 import type { ChildLaunch, Provider } from "./launch/command.js";
+import { parseTabModeArguments } from "./launch/tab-mode-arguments.js";
+import { createTabControlDecoder, type TabCommand } from "./control/tab-control-decoder.js";
 import { createSidecarView } from "./dashboard/sidecar-view.js";
 import { computeSingleSessionLayout, type SingleSessionLayout } from "./layout/single-session-layout.js";
 import { createProviderUsageAdapter } from "./providers/usage-adapter.js";
 import type { Disposable, PtyFactory, SessionExit, TerminalSize } from "./session/contracts.js";
 import { PtySession } from "./session/pty-session.js";
+import { MultiSessionManager } from "./session/multi-session-manager.js";
 import { resolvePtyExecutable } from "./session/resolve-executable.js";
 import { OuterRenderer } from "./terminal/outer-renderer.js";
 import { ScreenModel, type ScreenSnapshot } from "./terminal/screen-model.js";
@@ -49,12 +52,21 @@ export interface CliDependencies {
 }
 
 export async function runCli(argv: readonly string[], dependencies: CliDependencies): Promise<number> {
-  const [provider, ...passthrough] = argv;
+  const [provider, ...rawArguments] = argv;
   if (provider !== "codex" && provider !== "claude") {
     throw new Error("Usage: tgx <codex|claude> [provider arguments]");
   }
-  const selectedProvider: Provider = provider;
+  const { tabsEnabled, passthrough } = parseTabModeArguments(rawArguments);
+  return tabsEnabled
+    ? runTabbedCli(provider, passthrough, dependencies)
+    : runSingleSessionCli(provider, passthrough, dependencies);
+}
 
+async function runSingleSessionCli(
+  selectedProvider: Provider,
+  passthrough: readonly string[],
+  dependencies: CliDependencies
+): Promise<number> {
   const size = validateTerminalSize(dependencies.size);
   let layout = resolveLayout(size, dependencies);
   const launch = buildChildLaunch(selectedProvider, passthrough, dependencies.cwd, dependencies.env);
@@ -137,6 +149,123 @@ export async function runCli(argv: readonly string[], dependencies: CliDependenc
       frame = dependencies.renderFallbackSnapshot?.(snapshot) ?? "";
     }
     await dependencies.terminal.render(frame);
+  }
+}
+
+async function runTabbedCli(
+  provider: Provider,
+  passthrough: readonly string[],
+  dependencies: CliDependencies
+): Promise<number> {
+  const outerSize = validateTerminalSize(dependencies.size);
+  let layout = resolveLayout(outerSize, dependencies);
+  const launch = buildChildLaunch(provider, passthrough, dependencies.cwd, dependencies.env);
+  const manager = new MultiSessionManager({
+    size: layout.terminal,
+    maximumSessions: 8,
+    maximumQueuedOutputBytes: 1_048_576,
+    createSession: dependencies.createSession,
+    createScreenModel: dependencies.createScreenModel
+  });
+  const decoder = createTabControlDecoder({ enabled: true });
+  let entered = false;
+  let inputSubscription: Disposable | undefined;
+  let resizeSubscription: Disposable | undefined;
+  let changeSubscription: Disposable | undefined;
+  let pendingRender = Promise.resolve();
+  let inputQueue = Promise.resolve();
+  let lastExitCode = 0;
+  let resolveComplete: (() => void) | undefined;
+  const complete = new Promise<void>((resolve) => { resolveComplete = resolve; });
+
+  const renderCurrent = async (): Promise<void> => {
+    const selectedId = manager.selectedSessionId;
+    const selected = selectedId === undefined ? undefined : manager.get(selectedId);
+    if (selected === undefined) return;
+    try {
+      await dependencies.terminal.render(dependencies.renderSnapshot(selected.snapshot, layout, provider));
+    } catch {
+      await dependencies.terminal.render(dependencies.renderFallbackSnapshot?.(selected.snapshot) ?? "");
+    }
+  };
+  const queueRender = (): void => {
+    pendingRender = pendingRender.then(renderCurrent).catch(() => undefined);
+  };
+  const observeCompletion = (): void => {
+    const sessions = manager.sessions();
+    const exited = sessions.filter((session) => session.exit !== undefined).at(-1);
+    if (exited?.exit !== undefined) lastExitCode = exited.exit.exitCode;
+    if (sessions.every((session) => session.status !== "running")) resolveComplete?.();
+  };
+
+  try {
+    await dependencies.terminal.enter();
+    entered = true;
+    changeSubscription = manager.onChange(() => {
+      queueRender();
+      observeCompletion();
+    });
+    await manager.create(launch);
+    queueRender();
+
+    const inputTerminal = dependencies.terminal as ParentTerminal & Partial<InputCapableTerminal>;
+    if (inputTerminal.onInput !== undefined) {
+      inputSubscription = inputTerminal.onInput((data) => {
+        inputQueue = inputQueue.then(async () => {
+          for (const action of decoder.push(data)) {
+            if (action.kind === "forward") {
+              manager.writeSelected(action.data);
+            } else {
+              await runTabCommand(action.command);
+            }
+          }
+        }).catch(() => undefined);
+      });
+    }
+    const resizeTerminal = dependencies.terminal as ParentTerminal & Partial<ResizableTerminal>;
+    if (resizeTerminal.onResize !== undefined) {
+      resizeSubscription = resizeTerminal.onResize((nextSize) => {
+        try {
+          layout = resolveLayout(validateTerminalSize(nextSize), dependencies);
+          manager.resize(layout.terminal);
+          queueRender();
+        } catch { /* Invalid dimensions do not end active tabs. */ }
+      });
+    }
+    await complete;
+    await inputQueue;
+    await manager.flush();
+    await pendingRender;
+    return lastExitCode;
+  } finally {
+    resizeSubscription?.dispose();
+    inputSubscription?.dispose();
+    changeSubscription?.dispose();
+    await manager.closeAll().catch(() => undefined);
+    if (entered) await dependencies.terminal.restore();
+  }
+
+  async function runTabCommand(command: TabCommand): Promise<void> {
+    const running = manager.sessions().filter((session) => session.status === "running");
+    if (command === "new-session") {
+      const id = await manager.create(launch);
+      manager.select(id);
+      return;
+    }
+    const selectedIndex = running.findIndex((session) => session.id === manager.selectedSessionId);
+    if (command === "next-session" || command === "previous-session") {
+      if (running.length === 0) return;
+      const offset = command === "next-session" ? 1 : -1;
+      const next = running[(selectedIndex + offset + running.length) % running.length];
+      if (next !== undefined) manager.select(next.id);
+      return;
+    }
+    const selected = manager.selectedSessionId;
+    if (selected !== undefined) {
+      const exit = await manager.close(selected);
+      if (exit !== undefined) lastExitCode = exit.exitCode;
+      if (manager.sessions().every((session) => session.status !== "running")) resolveComplete?.();
+    }
   }
 }
 
