@@ -25,7 +25,7 @@ const usageSources: Record<ProviderId, DataSource> = {
   codex: {
     provider: "codex",
     documentationUrl: "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
-    providerVersion: "0.163.0",
+    providerVersion: "0.164.0",
     refreshMethod: "not-collected"
   },
   claude: {

@@ -11,7 +11,7 @@ const unsupportedCodexState: ProviderUsageState = {
     observedAt: new Date("2026-10-18T01:00:00.000Z"),
     source: {
       provider: "codex",
-      providerVersion: "0.163.0",
+      providerVersion: "0.164.0",
       documentationUrl: "https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan",
       refreshMethod: "not-collected",
     },
@@ -27,7 +27,7 @@ describe("createSidecarView", () => {
     expect(lines.every((line) => line.length === 30)).toBe(true);
     expect(rendered).toContain("TGX STATUS");
     expect(rendered).toContain("Provider: codex");
-    expect(rendered).toContain("CLI: 0.163.0");
+    expect(rendered).toContain("CLI: 0.164.0");
     expect(rendered).toContain("Status: Unsupported");
     expect(rendered).toContain("Source: help.openai.com");
     expect(rendered).not.toContain("0%");

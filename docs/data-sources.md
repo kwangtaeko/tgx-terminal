@@ -4,7 +4,7 @@
 
 | 공급자 | 확인한 CLI 버전 | 공식 출처 | 자동 수집 항목 | 상태 | 갱신 방식 | TTL·단위·reset 시각 | 실패·백오프 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Codex | 0.163.0 | [ChatGPT 플랜에서 Codex 사용](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan) | 없음 | `unsupported` | 수집기 미설치 | not available | 재시도 없음 |
+| Codex | 0.164.0 | [ChatGPT 플랜에서 Codex 사용](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan) | 없음 | `unsupported` | 수집기 미설치 | not available | 재시도 없음 |
 | Claude Code | 2.1.302 | [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage) | 없음 | `unsupported` | 수집기 미설치 | not available | 재시도 없음 |
 
 ## Codex

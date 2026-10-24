@@ -2,6 +2,8 @@
 
 | 일시 | 명령 | 기대 결과 | 실제 결과 | 판정 |
 | --- | --- | --- | --- | --- |
+| 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/multi-session-manager.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P3 다중 세션 코어의 입력·출력 격리, resize, 종료·오류 정리 검증 | 다중 세션 12개 테스트 및 전체 14개 파일·56개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; 실제 다중 탭 제어면은 pending manual verification |
+| 2026-10-24 | `node --version; pnpm.cmd --version; codex.cmd --version; claude --version; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P2 출처 메타데이터 재검증 | Node `v22.15.1`, pnpm `10.33.2`, Codex `0.164.0`, Claude `2.1.302`; 13 files, 44 tests passed; typecheck/build exit 0; `git diff --check` clean | pass with `.npmrc` `NODE_AUTH_TOKEN` warning |
 | 2026-10-18 | `pnpm.cmd exec vitest run && pnpm.cmd typecheck && pnpm.cmd build && git diff --check` | P1 Sidecar layout, safe dashboard view, renderer, resize integration verification | 13 files, 44 tests passed; typecheck/build exit 0; diff check clean | pass |
 | 2026-10-18 | `node dist/cli.js codex --version; node dist/cli.js claude --version` | Windows PTY launch and parent-terminal restoration smoke check after P1 | Codex `0.163.0` and Claude `2.1.302` exited 0; command runner was 80 columns, so the 92-column Sidecar visual scenario remains manual | pass with manual follow-up |
 | 2026-10-17 | `node --version` | Node 실행 가능 | `v22.15.1` | pass |

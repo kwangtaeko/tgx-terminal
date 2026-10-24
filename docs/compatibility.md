@@ -11,6 +11,7 @@
 | 공급자 | 시작 | 한글 입력 | 여러 줄 붙여넣기 | 승인 메뉴 | Ctrl+C | resize | alternate screen | 종료 후 복구 | 판정 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Codex CLI 0.163.0 | pass (`--version`) | not verified | not verified | not verified | not verified | not verified | not verified | pass (`--version`) | 대화형 수동 검증 필요 |
+| Codex CLI 0.164.0 | not verified | not verified | not verified | not verified | not verified | not verified | not verified | not verified | 2026-10-24 버전만 확인; 래퍼·대화형 수동 검증 필요 |
 | Claude Code 2.1.302 | pass (`--version`) | not verified | not verified | not verified | not verified | not verified | not verified | pass (`--version`) | 대화형 수동 검증 필요 |
 
 Windows Terminal, Cursor 통합 터미널, ConHost, WSL2, Linux는 아직 검증하지 않았습니다.
