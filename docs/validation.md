@@ -2,6 +2,8 @@
 
 | 일시 | 명령 | 기대 결과 | 실제 결과 | 판정 |
 | --- | --- | --- | --- | --- |
+| 2026-10-25 | `node dist/cli.js codex --tgx-tabs --version` | 실제 Windows PTY에서 탭 바 시작·자연 종료 상태 갱신·alternate screen 복구 확인 | `TGX | [1*] codex:running` 표시 후 `codex:exited`로 갱신, Codex `0.164.0`, exit 0, cursor/alternate screen 복구 | pass; 대화형 탭 전환·한글 IME·승인 메뉴는 수동 확인 대기 |
+| 2026-10-25 | `pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | `--tgx-tabs` 전용 상단 탭 바의 행 예약·안전 렌더·resize 크기 전달과 기본 경로 보존 검증 | 17개 파일, 72개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; 실제 Windows 대화형 탭·resize·승인 메뉴 검증은 수동 확인 대기 |
 | 2026-10-24 | `pnpm.cmd exec vitest run tests/integration/cli-lifecycle.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | `--tgx-tabs` 다중 세션 생성·닫기 및 부모 터미널 복구 검증 | CLI 수명주기 9개 테스트와 전체 suite 통과; typecheck/build exit 0 | pass; 실제 Windows 대화형 검증은 pending manual verification |
 | 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/tab-mode-arguments.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | `--tgx-tabs` 래퍼 인자와 provider passthrough 분리 검증 | 인자 parser 4개 테스트 및 전체 16개 파일·65개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; 제어면 연결은 후속 단계 |
 | 2026-10-24 | `pnpm.cmd exec vitest run tests/unit/tab-control-decoder.test.ts; pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | opt-in 탭 prefix 디코더의 pass-through·명령·분할 입력·미완성 prefix 검증 | 디코더 5개 테스트 및 전체 15개 파일·61개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; `runCli` 연결 및 실제 terminal 제어면은 pending manual verification |

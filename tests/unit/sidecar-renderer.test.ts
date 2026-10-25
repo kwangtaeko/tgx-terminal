@@ -47,6 +47,22 @@ describe("SidecarRenderer", () => {
     expect(rendered).toContain("safe");
     expect(rendered).not.toContain("\u001b]0;unsafe\u0007");
   });
+
+  it("renders a TGX tab bar before offset child and dashboard rows", () => {
+    const renderer = new SidecarRenderer();
+    const layout: SingleSessionLayout = {
+      terminal: { columns: 60, rows: 2 },
+      dashboard: { columns: 30, startColumn: 63 },
+      tabBar: { columns: 92 },
+    };
+
+    const rendered = renderer.render(snapshotWithLines(["child one", "child two"]), layout, ["status one", "status two"], "TGX tabs");
+
+    expect(rendered).toContain("\u001b[1;1H\u001b[2KTGX tabs");
+    expect(rendered).toContain("\u001b[2;1H\u001b[2Kchild one");
+    expect(rendered).toContain("\u001b[2;62H|");
+    expect(rendered).toContain("\u001b[2;63Hstatus one");
+  });
 });
 
 function snapshotWithLines(

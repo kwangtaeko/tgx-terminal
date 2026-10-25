@@ -130,15 +130,48 @@ describe("runCli", () => {
     const firstSession = sessions[0];
     if (firstSession === undefined) throw new Error("Missing first session");
     const dependencies = createDependencies(events, firstSession, undefined, terminal);
-    dependencies.createSession = () => {
+    dependencies.size = { columns: 92, rows: 24 };
+    dependencies.createLayout = computeSingleSessionLayout;
+    const renderSnapshot = vi.fn(() => "tab frame");
+    dependencies.renderSnapshot = renderSnapshot;
+    const createdSizes: TerminalSize[] = [];
+    dependencies.createSession = (_launch, size) => {
       const session = sessions.shift();
       if (session === undefined) throw new Error("Unexpected session");
+      createdSizes.push(size);
       return session;
     };
 
     await expect(runCli(["codex", "--tgx-tabs", "--model", "gpt test"], dependencies)).resolves.toBe(0);
 
     expect(events.filter((event) => event === "session.close")).toHaveLength(2);
+    expect(createdSizes).toEqual([{ columns: 60, rows: 23 }, { columns: 60, rows: 23 }]);
+    expect(renderSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ terminal: { columns: 60, rows: 23 }, tabBar: { columns: 92 } }),
+      "codex",
+      expect.objectContaining({ selectedSessionId: "session-1" })
+    );
+  });
+
+  it("renders the retained final tab after its natural exit", async () => {
+    const events: string[] = [];
+    const session = new NaturallyExitingSession(events, { exitCode: 3 });
+    const dependencies = createDependencies(events, session);
+    const renderSnapshot = vi.fn(() => "final tab frame");
+    dependencies.renderSnapshot = renderSnapshot;
+
+    await expect(runCli(["claude", "--tgx-tabs"], dependencies)).resolves.toBe(3);
+
+    expect(renderSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "claude",
+      expect.objectContaining({
+        selectedSessionId: undefined,
+        sessions: [expect.objectContaining({ status: "exited", exit: { exitCode: 3 } })],
+      })
+    );
   });
 });
 
@@ -276,5 +309,16 @@ class ControlledSession implements CliSession {
   async close(): Promise<SessionExit> {
     this.events.push("session.close");
     return { exitCode: 0 };
+  }
+}
+
+class NaturallyExitingSession extends ControlledSession {
+  constructor(events: string[], private readonly naturalExit: SessionExit) {
+    super(events);
+  }
+
+  override onExit(listener: (exit: SessionExit) => void): Disposable {
+    queueMicrotask(() => listener(this.naturalExit));
+    return { dispose() {} };
   }
 }

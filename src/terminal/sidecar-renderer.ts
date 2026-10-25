@@ -21,9 +21,10 @@ export class SidecarRenderer {
   render(
     snapshot: ScreenSnapshot,
     layout: SingleSessionLayout,
-    dashboardLines: readonly string[]
+    dashboardLines: readonly string[],
+    tabBarLine?: string
   ): string {
-    const frame = createFrame(snapshot, layout, dashboardLines);
+    const frame = createFrame(snapshot, layout, dashboardLines, tabBarLine);
     const previous = this.#previousFrame;
     this.#previousFrame = frame;
 
@@ -39,11 +40,16 @@ export class SidecarRenderer {
 function createFrame(
   snapshot: ScreenSnapshot,
   layout: SingleSessionLayout,
-  dashboardLines: readonly string[]
+  dashboardLines: readonly string[],
+  tabBarLine: string | undefined
 ): RenderedFrame {
-  const rows = Array.from({ length: layout.terminal.rows }, (_, index) => {
+  const rowOffset = layout.tabBar === undefined ? 0 : 1;
+  const rows = layout.tabBar === undefined ? [] : [formatTabBarLine(tabBarLine ?? "", layout.tabBar.columns)];
+
+  rows.push(...Array.from({ length: layout.terminal.rows }, (_, index) => {
     const childLine = snapshot.styledLines[index] ?? EMPTY_LINE;
     const child = renderStyledLine(childLine);
+    const physicalRow = index + rowOffset + 1;
 
     if (layout.dashboard === undefined) {
       return child;
@@ -51,11 +57,11 @@ function createFrame(
 
     const dashboard = formatDashboardLine(dashboardLines[index] ?? "", layout.dashboard.columns);
     const separatorColumn = layout.dashboard.startColumn - 1;
-    return `${child}\u001b[${index + 1};${separatorColumn}H|\u001b[${index + 1};${layout.dashboard.startColumn}H${dashboard}`;
-  });
+    return `${child}\u001b[${physicalRow};${separatorColumn}H|\u001b[${physicalRow};${layout.dashboard.startColumn}H${dashboard}`;
+  }));
 
   return {
-    geometry: `${layout.terminal.columns}x${layout.terminal.rows}:${layout.dashboard?.startColumn ?? "hidden"}`,
+    geometry: `${layout.tabBar?.columns ?? layout.terminal.columns}x${rows.length}:${layout.dashboard?.startColumn ?? "hidden"}`,
     rows,
   };
 }
@@ -65,6 +71,10 @@ function renderRow(index: number, row: string): string {
 }
 
 function formatDashboardLine(line: string, columns: number): string {
+  return line.replace(/[^\x20-\x7e]/g, "?").slice(0, columns).padEnd(columns, " ");
+}
+
+function formatTabBarLine(line: string, columns: number): string {
   return line.replace(/[^\x20-\x7e]/g, "?").slice(0, columns).padEnd(columns, " ");
 }
 

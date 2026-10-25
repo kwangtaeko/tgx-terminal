@@ -6,11 +6,12 @@ import type { ChildLaunch, Provider } from "./launch/command.js";
 import { parseTabModeArguments } from "./launch/tab-mode-arguments.js";
 import { createTabControlDecoder, type TabCommand } from "./control/tab-control-decoder.js";
 import { createSidecarView } from "./dashboard/sidecar-view.js";
-import { computeSingleSessionLayout, type SingleSessionLayout } from "./layout/single-session-layout.js";
+import { createTabStripView } from "./dashboard/tab-strip-view.js";
+import { addTabBar, computeSingleSessionLayout, type SingleSessionLayout } from "./layout/single-session-layout.js";
 import { createProviderUsageAdapter } from "./providers/usage-adapter.js";
 import type { Disposable, PtyFactory, SessionExit, TerminalSize } from "./session/contracts.js";
 import { PtySession } from "./session/pty-session.js";
-import { MultiSessionManager } from "./session/multi-session-manager.js";
+import { MultiSessionManager, type ManagedSession } from "./session/multi-session-manager.js";
 import { resolvePtyExecutable } from "./session/resolve-executable.js";
 import { OuterRenderer } from "./terminal/outer-renderer.js";
 import { ScreenModel, type ScreenSnapshot } from "./terminal/screen-model.js";
@@ -39,6 +40,11 @@ export interface ScreenOutputModel {
   dispose?(): void;
 }
 
+export interface TabRenderState {
+  readonly sessions: readonly ManagedSession[];
+  readonly selectedSessionId: string | undefined;
+}
+
 export interface CliDependencies {
   cwd: string;
   env: NodeJS.ProcessEnv;
@@ -47,7 +53,7 @@ export interface CliDependencies {
   createSession(launch: ChildLaunch, size: TerminalSize): CliSession;
   createScreenModel(size: TerminalSize): ScreenOutputModel;
   createLayout?(outerSize: TerminalSize): SingleSessionLayout;
-  renderSnapshot(snapshot: ScreenSnapshot, layout: SingleSessionLayout, provider: Provider): string;
+  renderSnapshot(snapshot: ScreenSnapshot, layout: SingleSessionLayout, provider: Provider, tabs?: TabRenderState): string;
   renderFallbackSnapshot?(snapshot: ScreenSnapshot): string;
 }
 
@@ -158,7 +164,7 @@ async function runTabbedCli(
   dependencies: CliDependencies
 ): Promise<number> {
   const outerSize = validateTerminalSize(dependencies.size);
-  let layout = resolveLayout(outerSize, dependencies);
+  let layout = resolveTabbedLayout(outerSize, dependencies);
   const launch = buildChildLaunch(provider, passthrough, dependencies.cwd, dependencies.env);
   const manager = new MultiSessionManager({
     size: layout.terminal,
@@ -180,10 +186,16 @@ async function runTabbedCli(
 
   const renderCurrent = async (): Promise<void> => {
     const selectedId = manager.selectedSessionId;
-    const selected = selectedId === undefined ? undefined : manager.get(selectedId);
+    const sessions = manager.sessions();
+    const selected = selectedId === undefined
+      ? sessions.at(-1)
+      : sessions.find((session) => session.id === selectedId);
     if (selected === undefined) return;
     try {
-      await dependencies.terminal.render(dependencies.renderSnapshot(selected.snapshot, layout, provider));
+      await dependencies.terminal.render(dependencies.renderSnapshot(selected.snapshot, layout, provider, {
+        sessions,
+        selectedSessionId: selectedId,
+      }));
     } catch {
       await dependencies.terminal.render(dependencies.renderFallbackSnapshot?.(selected.snapshot) ?? "");
     }
@@ -226,7 +238,7 @@ async function runTabbedCli(
     if (resizeTerminal.onResize !== undefined) {
       resizeSubscription = resizeTerminal.onResize((nextSize) => {
         try {
-          layout = resolveLayout(validateTerminalSize(nextSize), dependencies);
+          layout = resolveTabbedLayout(validateTerminalSize(nextSize), dependencies);
           manager.resize(layout.terminal);
           queueRender();
         } catch { /* Invalid dimensions do not end active tabs. */ }
@@ -282,12 +294,15 @@ export function createDefaultDependencies(): CliDependencies {
     createSession: (launch, size) => new PtySession(launch, size, nodePtyFactory),
     createScreenModel: (size) => new ScreenModel(size),
     createLayout: computeSingleSessionLayout,
-    renderSnapshot: (snapshot, layout, provider) => {
+    renderSnapshot: (snapshot, layout, provider, tabs) => {
       try {
         const dashboardLines = layout.dashboard === undefined
           ? []
           : createSidecarView(usageAdapter.getUsageState(provider), layout.dashboard.columns, layout.terminal.rows);
-        return sidecarRenderer.render(snapshot, layout, dashboardLines);
+        const tabBarLine = layout.tabBar === undefined || tabs === undefined
+          ? undefined
+          : createTabStripView(tabs.sessions, tabs.selectedSessionId, provider, layout.tabBar.columns);
+        return sidecarRenderer.render(snapshot, layout, dashboardLines, tabBarLine);
       } catch {
         sidecarRenderer.reset();
         return fallbackRenderer.render(snapshot);
@@ -305,6 +320,10 @@ function resolveLayout(outerSize: TerminalSize, dependencies: CliDependencies): 
 
   validateTerminalSize(layout.terminal);
   return layout;
+}
+
+function resolveTabbedLayout(outerSize: TerminalSize, dependencies: CliDependencies): SingleSessionLayout {
+  return addTabBar(resolveLayout(outerSize, dependencies), outerSize);
 }
 
 export function runDefaultCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
