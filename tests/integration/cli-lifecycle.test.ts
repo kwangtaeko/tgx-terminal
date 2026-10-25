@@ -138,6 +138,33 @@ describe("runCli", () => {
     ]);
   });
 
+  it("refreshes a visible statusline and disposes the refresh schedule on exit", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const dependencies = createDependencies(events, session);
+    const renderSnapshot = vi.fn(() => "child frame");
+    const scheduled: Array<() => void> = [];
+    let disposed = false;
+    dependencies.renderSnapshot = renderSnapshot;
+    dependencies.scheduleStatusRefresh = (listener) => {
+      scheduled.push(listener);
+      return { dispose: () => { disposed = true; } };
+    };
+
+    const running = runCli(["codex"], dependencies);
+    await waitFor(() => scheduled.length === 1);
+    session.emitData("ready");
+    await waitFor(() => renderSnapshot.mock.calls.length === 1);
+    const refresh = scheduled[0];
+    if (refresh === undefined) throw new Error("Status refresh was not scheduled");
+    refresh();
+    await waitFor(() => renderSnapshot.mock.calls.length === 2);
+    session.emitExit({ exitCode: 0 });
+
+    await expect(running).resolves.toBe(0);
+    expect(disposed).toBe(true);
+  });
+
   it("keeps TGX branding through non-visual child control output", async () => {
     const events: string[] = [];
     const session = new ManualSession(events);
