@@ -48,7 +48,7 @@
 - Modify: `tests/unit/status-line-view.test.ts`
 
 **Interfaces:**
-- Consumes: `{ provider, lifecycle, startedAt, now, project, tabs, ready }` and columns.
+- Consumes: `{ provider, lifecycle, startedAt, now, project, tabs }` and columns. lifecycle은 첫 출력 전 `CONNECTING`, 이후 `RUNNING`을 표현한다.
 - Produces: bounded ASCII statusline with elapsed/project/tab/usage guidance.
 
 - [x] Write failing tests for dynamic elapsed, project branch/dirty marker, Codex `/status`, Claude unavailable, and width bounds.

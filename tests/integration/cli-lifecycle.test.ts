@@ -165,6 +165,77 @@ describe("runCli", () => {
     expect(disposed).toBe(true);
   });
 
+  it("stops status refresh before teardown so it cannot render over the restored terminal", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const terminal = new DeferredChildFrameTerminal(events);
+    const dependencies = createDependencies(events, session, undefined, terminal);
+    const scheduled: Array<() => void> = [];
+    dependencies.renderSnapshot = () => "child frame";
+    dependencies.scheduleStatusRefresh = (listener) => {
+      scheduled.push(listener);
+      return { dispose() {} };
+    };
+
+    const running = runCli(["codex"], dependencies);
+    await waitFor(() => scheduled.length === 1);
+    session.emitData("ready");
+    await waitFor(() => terminal.frames.length === 2);
+    session.emitExit({ exitCode: 0 });
+    const refresh = scheduled[0];
+    if (refresh === undefined) throw new Error("Status refresh was not scheduled");
+    refresh();
+    refresh();
+    terminal.releaseChildFrame();
+
+    await expect(running).resolves.toBe(0);
+    expect(terminal.frames).toHaveLength(2);
+    expect(events.at(-1)).toBe("terminal.restore");
+  });
+
+  it("stops tabbed status refresh when the final session exits", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const terminal = new DeferredChildFrameTerminal(events, 3);
+    const dependencies = createDependencies(events, session, undefined, terminal);
+    const scheduled: Array<() => void> = [];
+    dependencies.renderSnapshot = () => "tab frame";
+    dependencies.scheduleStatusRefresh = (listener) => {
+      scheduled.push(listener);
+      return { dispose() {} };
+    };
+
+    const running = runCli(["codex", "--tgx-tabs"], dependencies);
+    await waitFor(() => scheduled.length === 1 && terminal.frames.length === 2);
+    session.emitData("ready");
+    await waitFor(() => terminal.frames.length === 3);
+    session.emitExit({ exitCode: 0 });
+    const refresh = scheduled[0];
+    if (refresh === undefined) throw new Error("Status refresh was not scheduled");
+    refresh();
+    refresh();
+    terminal.releaseChildFrame();
+
+    await expect(running).resolves.toBe(0);
+    expect(terminal.frames).toHaveLength(4);
+    expect(events.at(-1)).toBe("terminal.restore");
+  });
+
+  it("does not start a tabbed status refresh after the first session has already exited", async () => {
+    const events: string[] = [];
+    const session = new NaturallyExitingSession(events, { exitCode: 0 });
+    const dependencies = createDependencies(events, session);
+    const scheduled: Array<() => void> = [];
+    dependencies.scheduleStatusRefresh = (listener) => {
+      scheduled.push(listener);
+      return { dispose() {} };
+    };
+
+    await expect(runCli(["codex", "--tgx-tabs"], dependencies)).resolves.toBe(0);
+
+    expect(scheduled).toHaveLength(0);
+  });
+
   it("keeps TGX branding through non-visual child control output", async () => {
     const events: string[] = [];
     const session = new ManualSession(events);
@@ -471,6 +542,25 @@ class DeferredStartupTerminal extends RecordingTerminal {
   }
 
   releaseStartupFrame(): void {
+    this.#release?.();
+    this.#release = undefined;
+  }
+}
+
+class DeferredChildFrameTerminal extends RecordingTerminal {
+  #release: (() => void) | undefined;
+
+  constructor(events: string[], private readonly deferredFrame = 2) {
+    super(events);
+  }
+
+  override render(frame: string): Promise<void> {
+    this.frames.push(frame);
+    if (this.frames.length !== this.deferredFrame) return Promise.resolve();
+    return new Promise((resolve) => { this.#release = resolve; });
+  }
+
+  releaseChildFrame(): void {
     this.#release?.();
     this.#release = undefined;
   }

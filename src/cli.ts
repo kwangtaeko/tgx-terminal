@@ -6,7 +6,7 @@ import type { ChildLaunch, Provider } from "./launch/command.js";
 import { parseTabModeArguments } from "./launch/tab-mode-arguments.js";
 import { createTabControlDecoder, type TabCommand } from "./control/tab-control-decoder.js";
 import { createSidecarView } from "./dashboard/sidecar-view.js";
-import { createStatusLine } from "./dashboard/status-line-view.js";
+import { createStatusLine, type StatusLifecycle } from "./dashboard/status-line-view.js";
 import { readProjectContext } from "./dashboard/project-context.js";
 import { createStartupBrandLine, renderStartupBrandFrame } from "./dashboard/startup-brand-view.js";
 import { createTabStripView } from "./dashboard/tab-strip-view.js";
@@ -89,6 +89,7 @@ async function runSingleSessionCli(
   let inputSubscription: Disposable | undefined;
   let resizeSubscription: Disposable | undefined;
   let statusRefreshSubscription: Disposable | undefined;
+  let statusRefreshActive = false;
   let pendingRender = Promise.resolve();
   let showStartupBranding = true;
 
@@ -115,8 +116,9 @@ async function runSingleSessionCli(
     if (inputTerminal.onInput !== undefined) {
       inputSubscription = inputTerminal.onInput((data) => session?.write(data));
     }
+    statusRefreshActive = true;
     statusRefreshSubscription = dependencies.scheduleStatusRefresh?.(() => {
-      if (showStartupBranding) return;
+      if (!statusRefreshActive || showStartupBranding) return;
       pendingRender = pendingRender.then(renderCurrentSnapshot).catch(() => undefined);
     });
 
@@ -142,7 +144,7 @@ async function runSingleSessionCli(
   } finally {
     resizeSubscription?.dispose();
     inputSubscription?.dispose();
-    statusRefreshSubscription?.dispose();
+    stopStatusRefresh();
     outputSubscription?.dispose();
     exitSubscription?.dispose();
     if (session !== undefined) {
@@ -156,8 +158,17 @@ async function runSingleSessionCli(
 
   function waitForExit(activeSession: CliSession): Promise<SessionExit> {
     return new Promise<SessionExit>((resolve) => {
-      exitSubscription = activeSession.onExit(resolve);
+      exitSubscription = activeSession.onExit((exit) => {
+        stopStatusRefresh();
+        resolve(exit);
+      });
     });
+  }
+
+  function stopStatusRefresh(): void {
+    statusRefreshActive = false;
+    statusRefreshSubscription?.dispose();
+    statusRefreshSubscription = undefined;
   }
 
   async function renderCurrentSnapshot(): Promise<void> {
@@ -204,10 +215,12 @@ async function runTabbedCli(
   let resizeSubscription: Disposable | undefined;
   let changeSubscription: Disposable | undefined;
   let statusRefreshSubscription: Disposable | undefined;
+  let statusRefreshActive = false;
   let pendingRender = Promise.resolve();
   let inputQueue = Promise.resolve();
   let lastExitCode = 0;
   let showStartupBranding = true;
+  let isComplete = false;
   let resolveComplete: (() => void) | undefined;
   const complete = new Promise<void>((resolve) => { resolveComplete = resolve; });
 
@@ -239,8 +252,18 @@ async function runTabbedCli(
     const sessions = manager.sessions();
     const exited = sessions.filter((session) => session.exit !== undefined).at(-1);
     if (exited?.exit !== undefined) lastExitCode = exited.exit.exitCode;
-    if (sessions.every((session) => session.status !== "running")) resolveComplete?.();
+    if (sessions.every((session) => session.status !== "running")) {
+      isComplete = true;
+      stopStatusRefresh();
+      resolveComplete?.();
+    }
   };
+
+  function stopStatusRefresh(): void {
+    statusRefreshActive = false;
+    statusRefreshSubscription?.dispose();
+    statusRefreshSubscription = undefined;
+  }
 
   try {
     await dependencies.terminal.enter();
@@ -266,9 +289,12 @@ async function runTabbedCli(
         }).catch(() => undefined);
       });
     }
-    statusRefreshSubscription = dependencies.scheduleStatusRefresh?.(() => {
-      if (!showStartupBranding) queueRender();
-    });
+    if (!isComplete) {
+      statusRefreshActive = true;
+      statusRefreshSubscription = dependencies.scheduleStatusRefresh?.(() => {
+        if (statusRefreshActive && !isComplete && !showStartupBranding) queueRender();
+      });
+    }
     const resizeTerminal = dependencies.terminal as ParentTerminal & Partial<ResizableTerminal>;
     if (resizeTerminal.onResize !== undefined) {
       resizeSubscription = resizeTerminal.onResize((nextSize) => {
@@ -287,7 +313,7 @@ async function runTabbedCli(
   } finally {
     resizeSubscription?.dispose();
     inputSubscription?.dispose();
-    statusRefreshSubscription?.dispose();
+    stopStatusRefresh();
     changeSubscription?.dispose();
     await manager.closeAll().catch(() => undefined);
     if (entered) await dependencies.terminal.restore();
@@ -324,6 +350,7 @@ export function createDefaultDependencies(): CliDependencies {
   const startedAt = new Date();
   const project = readProjectContext(process.cwd());
   const usageAdapter = createProviderUsageAdapter();
+  let singleSessionHasReceivedOutput = false;
   return {
     cwd: process.cwd(),
     env: process.env,
@@ -342,19 +369,10 @@ export function createDefaultDependencies(): CliDependencies {
           : tabs.showStartupBranding
             ? createStartupBrandLine(provider, layout.tabBar.columns)
             : createTabStripView(tabs.sessions, tabs.selectedSessionId, provider, layout.tabBar.columns);
-        const selectedSession = tabs?.selectedSessionId === undefined
-          ? undefined
-          : tabs.sessions.find((session) => session.id === tabs.selectedSessionId);
-        const ready = tabs === undefined
-          ? hasVisibleScreenContent(snapshot)
-          : selectedSession?.hasReceivedOutput === true;
-        const lifecycle = selectedSession?.status === "error"
-          ? "error"
-          : selectedSession?.status === "exited"
-            ? "exited"
-            : ready
-              ? "running"
-              : "connecting";
+        if (tabs === undefined && hasVisibleScreenContent(snapshot)) {
+          singleSessionHasReceivedOutput = true;
+        }
+        const lifecycle = resolveStatusLifecycle(snapshot, tabs, singleSessionHasReceivedOutput);
         const statusLine = layout.statusLine === undefined
           ? undefined
           : createStatusLine({
@@ -404,6 +422,23 @@ function layoutWidth(layout: SingleSessionLayout): number {
 
 function hasVisibleScreenContent(snapshot: ScreenSnapshot): boolean {
   return snapshot.lines.some((line) => line.trim() !== "");
+}
+
+/** Derives lifecycle from persistent session facts, not just the current VT pixels. */
+export function resolveStatusLifecycle(
+  snapshot: ScreenSnapshot,
+  tabs: TabRenderState | undefined,
+  singleSessionHasReceivedOutput: boolean
+): StatusLifecycle {
+  const selectedSession = tabs === undefined
+    ? undefined
+    : tabs.sessions.find((session) => session.id === tabs.selectedSessionId) ?? tabs.sessions.at(-1);
+  if (selectedSession?.status === "error") return "error";
+  if (selectedSession?.status === "exited") return "exited";
+  const ready = tabs === undefined
+    ? singleSessionHasReceivedOutput || hasVisibleScreenContent(snapshot)
+    : selectedSession?.hasReceivedOutput === true;
+  return ready ? "running" : "connecting";
 }
 
 export function runDefaultCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {

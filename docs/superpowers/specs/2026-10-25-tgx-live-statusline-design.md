@@ -8,13 +8,12 @@
 
 기본 상태줄은 좁은 폭에서 오른쪽부터 잘리며 다음 순서의 ASCII 항목을 사용한다.
 
-`TGX | CODEX | RUNNING | 03:42 | tgx-terminal @ main* | READY | TABS 1 | USAGE /status`
+`TGX | CODEX | RUNNING | 03:42 | TABS 1 | USAGE /status | tgx-terminal @ main*`
 
 - provider: 실제 선택한 provider.
 - lifecycle: TGX가 관리하는 `CONNECTING`, `RUNNING`, `EXITED`, `ERROR`.
 - elapsed: 이 TGX launch 이후 실제 경과시간(`mm:ss`, 한 시간을 넘으면 `hh:mm:ss`).
-- project: 실제 실행 cwd의 마지막 폴더명; Git 저장소이면 읽기 전용으로 branch와 tracked-file dirty 여부(`*`)를 덧붙인다.
-- readiness: 첫 자식 출력 전 `CONNECTING`, 이후 `READY`.
+- project: 실제 실행 cwd의 마지막 폴더명; Git 저장소이면 읽기 전용으로 branch와 tracked-file dirty 여부(`*`)를 덧붙인다. 좁은 폭에서도 사용량 안내를 보존하도록 마지막에 둔다.
 - tabs: TGX가 관리하는 실제 세션 수.
 - usage: Codex는 `USAGE /status`, Claude는 `USAGE UNAVAILABLE`; 사용량 수치·reset 시각·토큰은 표시하지 않는다.
 
