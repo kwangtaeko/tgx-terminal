@@ -4,11 +4,12 @@ import * as pty from "node-pty";
 import { describe, expect, it } from "vitest";
 
 import { buildChildLaunch } from "../../src/launch/command.js";
-import type { Disposable, PtyFactory, PtyProcess } from "../../src/session/contracts.js";
+import type { Disposable, PtyFactory, PtyProcess, SessionExit } from "../../src/session/contracts.js";
 import { PtySession } from "../../src/session/pty-session.js";
 import { validateTerminalSize } from "../../src/terminal/size.js";
 
 const fixturePath = fileURLToPath(new URL("../fixtures/pty-child.mjs", import.meta.url));
+const rawKeyFixturePath = fileURLToPath(new URL("../fixtures/raw-key-child.mjs", import.meta.url));
 
 class ControlledPty implements PtyProcess {
   readonly writes: string[] = [];
@@ -60,9 +61,9 @@ class ControlledPty implements PtyProcess {
   }
 }
 
-function createFixtureFactory(): PtyFactory {
+function createFixtureFactory(childPath = fixturePath): PtyFactory {
   return (launch, size) => {
-    const child = pty.spawn(process.execPath, [fixturePath], {
+    const child = pty.spawn(process.execPath, [childPath], {
       cols: size.columns,
       cwd: launch.cwd,
       env: launch.env,
@@ -112,6 +113,58 @@ describe("PtySession", () => {
     await expect(session.close()).resolves.toMatchObject({ exitCode: 0 });
     expect(output.join("")).toContain("INPUT:hello");
     expect(output.join("")).toContain("EXITING");
+  });
+
+  it("observes the Windows ConPTY backspace byte received by a raw child", async () => {
+    const session = new PtySession(
+      buildChildLaunch("codex", [], process.cwd(), process.env),
+      { columns: 80, rows: 24 },
+      createFixtureFactory(rawKeyFixturePath)
+    );
+    const childExit = new Promise<SessionExit>((resolve) => session.onExit(resolve));
+    let output = "";
+    const received = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`raw key fixture did not return a byte: ${JSON.stringify(output)}`)), 1_000);
+      session.onData((data) => {
+        output += data;
+        if (output.includes("READY")) session.write("\b");
+        if (output.includes("RX:7f")) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+
+    await received;
+    await expect(childExit).resolves.toMatchObject({ exitCode: 0 });
+    await expect(session.close()).resolves.toMatchObject({ exitCode: 0 });
+    expect(output).toContain("RX:7f");
+  });
+
+  it("observes the Windows ConPTY DEL-to-backspace mapping in a raw child", async () => {
+    const session = new PtySession(
+      buildChildLaunch("codex", [], process.cwd(), process.env),
+      { columns: 80, rows: 24 },
+      createFixtureFactory(rawKeyFixturePath)
+    );
+    const childExit = new Promise<SessionExit>((resolve) => session.onExit(resolve));
+    let output = "";
+    const received = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`DEL fixture did not return a byte: ${JSON.stringify(output)}`)), 1_000);
+      session.onData((data) => {
+        output += data;
+        if (output.includes("READY")) session.write("\x7f");
+        if (output.includes("RX:08")) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+
+    await received;
+    await expect(childExit).resolves.toMatchObject({ exitCode: 0 });
+    await expect(session.close()).resolves.toMatchObject({ exitCode: 0 });
+    expect(output).toContain("RX:08");
   });
 
   it("shares close work, removes PTY listeners, and rejects writes after exit", async () => {

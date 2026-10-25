@@ -89,7 +89,7 @@ export class ProcessTerminal implements InputCapableTerminal, ResizableTerminal 
     const decoder = new StringDecoder("utf8");
     const onData = (data: Buffer | string): void => {
       const decoded = decoder.write(typeof data === "string" ? Buffer.from(data, "utf8") : data);
-      if (decoded !== "") listener(decoded);
+      if (decoded !== "") listener(compensateWindowsPtyInput(decoded));
     };
 
     this.input.on("data", onData);
@@ -105,4 +105,14 @@ export class ProcessTerminal implements InputCapableTerminal, ResizableTerminal 
     this.output.on("resize", onResize);
     return { dispose: () => this.output.off?.("resize", onResize) };
   }
+}
+
+/**
+ * ConPTY swaps BS (0x08) and DEL (0x7f) while converting its input stream
+ * into Windows key events. Swap them before the PTY boundary to preserve the
+ * byte the parent terminal received for the child CLI.
+ */
+function compensateWindowsPtyInput(data: string): string {
+  if (process.platform !== "win32") return data;
+  return data.replace(/[\b\x7f]/g, (character) => (character === "\b" ? "\x7f" : "\b"));
 }

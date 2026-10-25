@@ -116,4 +116,22 @@ describe("ProcessTerminal", () => {
 
     expect(received).toEqual(["한"]);
   });
+
+  it("compensates for the Windows PTY backspace and DEL byte swap", () => {
+    let dataListener: ((data: Buffer | string) => void) | undefined;
+    const input = {
+      resume: () => undefined,
+      on: (event: "data", listener: (data: Buffer | string) => void) => {
+        if (event === "data") dataListener = listener;
+      },
+      off: () => undefined
+    };
+    const terminal = new ProcessTerminal(input, { write: () => true });
+    const received: string[] = [];
+
+    terminal.onInput((data) => received.push(data));
+    dataListener?.(Buffer.from("\b\x7f", "latin1"));
+
+    expect(received).toEqual(process.platform === "win32" ? ["\x7f\b"] : ["\b\x7f"]);
+  });
 });
