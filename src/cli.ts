@@ -99,8 +99,10 @@ async function runSingleSessionCli(
 
     outputSubscription = session.onData((data) => {
       pendingRender = pendingRender.then(async () => {
-        await screen?.write(data);
-        if (data.length > 0) showStartupBranding = false;
+        if (screen === undefined) return;
+        await screen.write(data);
+        if (showStartupBranding && !hasVisibleScreenContent(screen.snapshot())) return;
+        showStartupBranding = false;
         await renderCurrentSnapshot();
       });
     });
@@ -352,6 +354,10 @@ function layoutWidth(layout: SingleSessionLayout): number {
   return layout.dashboard === undefined
     ? layout.terminal.columns
     : layout.dashboard.startColumn + layout.dashboard.columns - 1;
+}
+
+function hasVisibleScreenContent(snapshot: ScreenSnapshot): boolean {
+  return snapshot.lines.some((line) => line.trim() !== "");
 }
 
 export function runDefaultCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {

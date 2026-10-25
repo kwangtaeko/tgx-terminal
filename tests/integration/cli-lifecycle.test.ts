@@ -138,6 +138,28 @@ describe("runCli", () => {
     ]);
   });
 
+  it("keeps TGX branding through non-visual child control output", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const terminal = new RecordingTerminal(events);
+    const screen = new VisibilityControlledScreen();
+    const dependencies = createDependencies(events, session, undefined, terminal, screen);
+    dependencies.renderSnapshot = () => "child frame";
+
+    const running = runCli(["codex"], dependencies);
+    await waitFor(() => terminal.frames.length === 1);
+    session.emitData("\u001b[?2004h");
+    await waitFor(() => screen.writes.length === 1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(terminal.frames).toHaveLength(1);
+    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
+
+    session.emitData("visible");
+    await waitFor(() => terminal.frames.at(-1) === "child frame");
+    session.emitExit({ exitCode: 0 });
+    await expect(running).resolves.toBe(0);
+  });
+
   it("keeps a single-session startup indicator through resize before child output", async () => {
     const events: string[] = [];
     const session = new ManualSession(events);
@@ -343,7 +365,31 @@ class FakeScreenModel implements ScreenOutputModel {
   }
 
   snapshot(): ScreenSnapshot {
-    return { columns: 80, rows: 24, lines: [], styledLines: [], cursor: { x: 0, y: 0 } };
+    const latest = this.writes.at(-1);
+    return latest === undefined
+      ? { columns: 80, rows: 24, lines: [], styledLines: [], cursor: { x: 0, y: 0 } }
+      : {
+          columns: 80,
+          rows: 24,
+          lines: [latest],
+          styledLines: [{ segments: [{ text: latest, style: {} }] }],
+          cursor: { x: latest.length, y: 0 },
+        };
+  }
+}
+
+class VisibilityControlledScreen extends FakeScreenModel {
+  override snapshot(): ScreenSnapshot {
+    const visible = this.writes.includes("visible");
+    return visible
+      ? {
+          columns: 80,
+          rows: 24,
+          lines: ["visible"],
+          styledLines: [{ segments: [{ text: "visible", style: {} }] }],
+          cursor: { x: 7, y: 0 },
+        }
+      : { columns: 80, rows: 24, lines: [], styledLines: [], cursor: { x: 0, y: 0 } };
   }
 }
 
