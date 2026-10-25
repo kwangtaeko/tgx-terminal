@@ -1,3 +1,5 @@
+import { StringDecoder } from "node:string_decoder";
+
 import type { Disposable, TerminalSize } from "../session/contracts.js";
 
 export interface InputCapableTerminal {
@@ -84,8 +86,10 @@ export class ProcessTerminal implements InputCapableTerminal, ResizableTerminal 
   }
 
   onInput(listener: (data: string) => void): Disposable {
+    const decoder = new StringDecoder("utf8");
     const onData = (data: Buffer | string): void => {
-      listener(typeof data === "string" ? data : data.toString("utf8"));
+      const decoded = decoder.write(typeof data === "string" ? Buffer.from(data, "utf8") : data);
+      if (decoded !== "") listener(decoded);
     };
 
     this.input.on("data", onData);

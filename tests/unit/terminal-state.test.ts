@@ -95,4 +95,25 @@ describe("ProcessTerminal", () => {
     await rendering;
     expect(completed).toBe(true);
   });
+
+  it("relays a Korean character when its UTF-8 bytes arrive in separate input events", () => {
+    let dataListener: ((data: Buffer | string) => void) | undefined;
+    const input = {
+      resume: () => undefined,
+      on: (event: "data", listener: (data: Buffer | string) => void) => {
+        if (event === "data") dataListener = listener;
+      },
+      off: () => undefined
+    };
+    const output = { write: () => true };
+    const terminal = new ProcessTerminal(input, output);
+    const received: string[] = [];
+    const korean = Buffer.from("한", "utf8");
+
+    terminal.onInput((data) => received.push(data));
+    dataListener?.(korean.subarray(0, 2));
+    dataListener?.(korean.subarray(2));
+
+    expect(received).toEqual(["한"]);
+  });
 });
