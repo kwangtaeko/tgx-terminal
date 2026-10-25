@@ -15,7 +15,7 @@ describe("startup branding view", () => {
   it("renders a three-row TGX wordmark with a foreground-only shadow", () => {
     const frame = renderStartupBrandFrame("claude", 80);
 
-    expect(frame).toContain("\u001b[2J\u001b[H\u001b[1;1H\u001b[2K\u001b[1;38;5;195mTGX");
+    expect(frame.startsWith("\u001b[0m\u001b[2J\u001b[H\u001b[1;1H\u001b[2K\u001b[1;38;5;195mTGX")).toBe(true);
     expect(frame).toContain("\u001b[2;1H\u001b[2K\u001b[38;5;24m TGX");
     expect(frame).toContain("\u001b[3;1H\u001b[2K\u001b[38;5;67m CONNECTING TO CLAUDE");
     expect(frame).not.toContain("\u001b[48;");
@@ -36,8 +36,8 @@ describe("startup branding view", () => {
 
     expect(frame).toContain("\u001b[1;1H\u001b[2K\u001b[1;38;5;195mTGX");
     expect(frame).toContain("\u001b[2;1H\u001b[2K\u001b[38;5;24m TGX");
-    expect(frame).toContain("\u001b[3;1H\u001b[2K\u001b[38;5;24m  TGX");
-    expect(frame).toContain("\u001b[5;1H\u001b[2K\u001b[38;5;67mCONNECTING TO CODEX");
+    expect(frame).toContain("\u001b[4;1H\u001b[2K\u001b[38;5;67mCONNECTING TO CODEX");
+    expect(frame).not.toContain("\u001b[38;5;24m  TGX");
     expect(frame).not.toContain("TTTTTT");
     expect(compactFrame).toContain("\u001b[38;5;24m TGX");
   });
@@ -46,8 +46,8 @@ describe("startup branding view", () => {
     const sevenRows = renderStartupBrandFrame("claude", 80, 7);
     const sixRows = renderStartupBrandFrame("claude", 80, 6);
 
-    expect(sevenRows).toContain("\u001b[38;5;24m  TGX");
-    expect(sevenRows).toContain("\u001b[6;1H\u001b[2K\u001b[38;5;67mSAFE PTY SESSION");
+    expect(sevenRows).toContain("\u001b[5;1H\u001b[2K\u001b[38;5;67mSAFE PTY SESSION");
+    expect(sevenRows).not.toContain("\u001b[38;5;24m  TGX");
     expect(sevenRows).not.toContain("\u001b[8;1H");
     expect(sixRows).toContain("\u001b[38;5;24m TGX");
     expect(sixRows).not.toContain("\u001b[38;5;24m  TGX");

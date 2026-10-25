@@ -24,7 +24,6 @@ export function renderStartupBrandFrame(provider: Provider, columns: number, ava
   const elevatedRows: readonly BrandRow[] = [
     { text: "TGX", style: FRONT_STYLE },
     { text: " TGX", style: SHADOW_STYLE },
-    { text: "  TGX", style: SHADOW_STYLE },
     { text: "", style: DETAIL_STYLE },
     { text: `CONNECTING TO ${provider.toUpperCase()}`, style: DETAIL_STYLE },
     { text: "SAFE PTY SESSION", style: DETAIL_STYLE },
@@ -36,7 +35,7 @@ export function renderStartupBrandFrame(provider: Provider, columns: number, ava
     .map((row, index) => `\u001b[${index + 1};1H\u001b[2K${row.style}${fitPrintableAscii(row.text, columns)}`)
     .join("");
 
-  return `\u001b[2J\u001b[H${renderedRows}\u001b[0m`;
+  return `\u001b[0m\u001b[2J\u001b[H${renderedRows}\u001b[0m`;
 }
 
 function fitPrintableAscii(value: string, columns: number): string {
