@@ -48,7 +48,7 @@ describe("ScreenModel", () => {
 
     const snapshot = model.snapshot();
     expect(snapshot.lines).toEqual(["second", "third"]);
-    expect(renderSnapshot(snapshot)).toBe("\u001b[2J\u001b[Hsecond\r\nthird\u001b[0m");
+    expect(renderSnapshot(snapshot)).toBe("\u001b[2J\u001b[Hsecond\r\nthird\u001b[0m\u001b[2;6H\u001b[?25h");
   });
 
   it("retains palette, RGB, and basic text styles in safe render segments", async () => {
@@ -77,9 +77,18 @@ describe("ScreenModel", () => {
     const initial = snapshotWithLines(["first", "second"]);
     const changed = snapshotWithLines(["updated", "second"]);
 
-    expect(renderer.render(initial)).toBe("\u001b[2J\u001b[Hfirst\r\nsecond\u001b[0m");
-    expect(renderer.render(changed)).toBe("\u001b[1;1H\u001b[2Kupdated\u001b[0m");
+    expect(renderer.render(initial)).toBe("\u001b[2J\u001b[Hfirst\r\nsecond\u001b[0m\u001b[1;1H\u001b[?25h");
+    expect(renderer.render(changed)).toBe("\u001b[1;1H\u001b[2Kupdated\u001b[0m\u001b[1;1H\u001b[?25h");
     expect(renderer.render(changed)).toBe("");
+  });
+
+  it("restores the child cursor and emits a cursor-only update when text is unchanged", () => {
+    const renderer = new OuterRenderer();
+    const initial = snapshotWithLines(["first", "second"], { x: 3, y: 1 });
+    const cursorMoved = snapshotWithLines(["first", "second"], { x: 1, y: 0 });
+
+    expect(renderer.render(initial)).toMatch(/\u001b\[0m\u001b\[2;4H\u001b\[\?25h$/u);
+    expect(renderer.render(cursorMoved)).toBe("\u001b[0m\u001b[1;2H\u001b[?25h");
   });
 
   it("resizes the current VT viewport", async () => {
@@ -98,17 +107,17 @@ describe("ScreenModel", () => {
     renderer.render(snapshotWithLines(["first", "second"]));
 
     expect(renderer.render(snapshotWithLines(["first", "second", "third"]))).toBe(
-      "\u001b[2J\u001b[Hfirst\r\nsecond\r\nthird\u001b[0m"
+      "\u001b[2J\u001b[Hfirst\r\nsecond\r\nthird\u001b[0m\u001b[1;1H\u001b[?25h"
     );
   });
 });
 
-function snapshotWithLines(lines: readonly string[]) {
+function snapshotWithLines(lines: readonly string[], cursor = { x: 0, y: 0 }) {
   return {
     columns: 16,
     rows: lines.length,
     lines,
     styledLines: lines.map((text) => ({ segments: [{ text, style: {} }] })),
-    cursor: { x: 0, y: 0 }
+    cursor
   };
 }

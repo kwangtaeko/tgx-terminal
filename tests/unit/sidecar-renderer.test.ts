@@ -63,12 +63,36 @@ describe("SidecarRenderer", () => {
     expect(rendered).toContain("\u001b[2;62H|");
     expect(rendered).toContain("\u001b[2;63Hstatus one");
   });
+
+  it("restores the child cursor below a tab bar rather than in the TGX row", () => {
+    const renderer = new SidecarRenderer();
+    const layout: SingleSessionLayout = {
+      terminal: { columns: 60, rows: 2 },
+      dashboard: undefined,
+      tabBar: { columns: 60 },
+    };
+    const snapshot = snapshotWithLines(["child one", "child two"], 60, undefined, { x: 4, y: 1 });
+
+    const rendered = renderer.render(snapshot, layout, [], "TGX tabs");
+
+    expect(rendered).toMatch(/\u001b\[0m\u001b\[3;5H\u001b\[\?25h$/u);
+  });
+
+  it("emits only a clamped cursor update when sidecar text is unchanged", () => {
+    const renderer = new SidecarRenderer();
+    const initial = snapshotWithLines(["child one", "child two"], 60, undefined, { x: 90, y: 4 });
+    const cursorMoved = snapshotWithLines(["child one", "child two"], 60, undefined, { x: -3, y: -2 });
+
+    expect(renderer.render(initial, sidecarLayout, ["TGX STATUS", ""])).toMatch(/\u001b\[2;60H\u001b\[\?25h$/u);
+    expect(renderer.render(cursorMoved, sidecarLayout, ["TGX STATUS", ""])).toBe("\u001b[0m\u001b[1;1H\u001b[?25h");
+  });
 });
 
 function snapshotWithLines(
   lines: readonly string[],
   columns = 60,
-  styledLines = lines
+  styledLines: readonly string[] | undefined = lines,
+  cursor = { x: 0, y: 0 }
 ): {
   columns: number;
   rows: number;
@@ -76,11 +100,12 @@ function snapshotWithLines(
   styledLines: readonly { segments: readonly { text: string; style: {} }[] }[];
   cursor: { x: number; y: number };
 } {
+  const safeStyledLines = styledLines ?? lines;
   return {
     columns,
     rows: lines.length,
     lines,
-    styledLines: styledLines.map((text) => ({ segments: [{ text, style: {} }] })),
-    cursor: { x: 0, y: 0 },
+    styledLines: safeStyledLines.map((text) => ({ segments: [{ text, style: {} }] })),
+    cursor,
   };
 }

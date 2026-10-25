@@ -5,6 +5,12 @@ import { renderStyledLine } from "./outer-renderer.js";
 interface RenderedFrame {
   readonly geometry: string;
   readonly rows: readonly string[];
+  readonly cursor: CursorPosition;
+}
+
+interface CursorPosition {
+  readonly column: number;
+  readonly row: number;
 }
 
 /**
@@ -29,11 +35,12 @@ export class SidecarRenderer {
     this.#previousFrame = frame;
 
     if (previous === undefined || previous.geometry !== frame.geometry || previous.rows.length !== frame.rows.length) {
-      return `\u001b[2J\u001b[H${frame.rows.map((row, index) => renderRow(index, row)).join("")}\u001b[0m`;
+      return `\u001b[2J\u001b[H${frame.rows.map((row, index) => renderRow(index, row)).join("")}\u001b[0m${renderCursor(frame.cursor)}`;
     }
 
     const changedRows = frame.rows.flatMap((row, index) => (row === previous.rows[index] ? [] : [renderRow(index, row)]));
-    return changedRows.length === 0 ? "" : `${changedRows.join("")}\u001b[0m`;
+    if (changedRows.length === 0 && cursorEquals(frame.cursor, previous.cursor)) return "";
+    return `${changedRows.join("")}\u001b[0m${renderCursor(frame.cursor)}`;
   }
 }
 
@@ -63,6 +70,10 @@ function createFrame(
   return {
     geometry: `${layout.tabBar?.columns ?? layout.terminal.columns}x${rows.length}:${layout.dashboard?.startColumn ?? "hidden"}`,
     rows,
+    cursor: {
+      column: clamp(snapshot.cursor.x, layout.terminal.columns),
+      row: clamp(snapshot.cursor.y, layout.terminal.rows) + rowOffset,
+    },
   };
 }
 
@@ -76,6 +87,18 @@ function formatDashboardLine(line: string, columns: number): string {
 
 function formatTabBarLine(line: string, columns: number): string {
   return line.replace(/[^\x20-\x7e]/g, "?").slice(0, columns).padEnd(columns, " ");
+}
+
+function renderCursor(cursor: CursorPosition): string {
+  return `\u001b[${cursor.row + 1};${cursor.column + 1}H\u001b[?25h`;
+}
+
+function clamp(value: number, size: number): number {
+  return Math.max(0, Math.min(size - 1, value));
+}
+
+function cursorEquals(left: CursorPosition, right: CursorPosition): boolean {
+  return left.column === right.column && left.row === right.row;
 }
 
 const EMPTY_LINE: ScreenLine = { segments: [] };
