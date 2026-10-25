@@ -24,6 +24,8 @@ export interface ManagedScreen {
 export interface ManagedSession {
   readonly id: string;
   readonly status: ManagedSessionStatus;
+  /** True only after non-empty child output has been applied to this VT screen. */
+  readonly hasReceivedOutput: boolean;
   readonly snapshot: ScreenSnapshot;
   readonly exit?: SessionExit;
 }
@@ -47,6 +49,7 @@ interface SessionRecord {
   outputChain: Promise<void>;
   pendingOutputBytes: number;
   pendingOutputChunks: number;
+  hasReceivedOutput: boolean;
   acceptsOutput: boolean;
   released: boolean;
   closePromise: Promise<SessionExit | undefined> | undefined;
@@ -112,6 +115,7 @@ export class MultiSessionManager {
         outputChain: Promise.resolve(),
         pendingOutputBytes: 0,
         pendingOutputChunks: 0,
+        hasReceivedOutput: false,
         acceptsOutput: true,
         released: false,
         closePromise: undefined
@@ -211,9 +215,9 @@ export class MultiSessionManager {
       () => record.screen.write(data),
       () => record.screen.write(data)
     ).then(
-      () => this.#settleOutput(record, bytes),
+      () => this.#settleOutput(record, bytes, bytes > 0),
       () => {
-        this.#settleOutput(record, bytes);
+        this.#settleOutput(record, bytes, false);
         this.#markError(record);
       }
     );
@@ -247,9 +251,10 @@ export class MultiSessionManager {
     }
   }
 
-  #settleOutput(record: SessionRecord, bytes: number): void {
+  #settleOutput(record: SessionRecord, bytes: number, receivedOutput: boolean): void {
     record.pendingOutputBytes -= bytes;
     record.pendingOutputChunks -= 1;
+    if (receivedOutput) record.hasReceivedOutput = true;
     this.#notifyChange();
   }
 
@@ -282,7 +287,12 @@ export class MultiSessionManager {
   }
 
   #snapshot(record: SessionRecord): ManagedSession {
-    const base = { id: record.id, status: record.status, snapshot: record.screen.snapshot() };
+    const base = {
+      id: record.id,
+      status: record.status,
+      hasReceivedOutput: record.hasReceivedOutput,
+      snapshot: record.screen.snapshot()
+    };
     return record.exit === undefined ? base : { ...base, exit: record.exit };
   }
 }

@@ -6,6 +6,7 @@ import type { ChildLaunch, Provider } from "./launch/command.js";
 import { parseTabModeArguments } from "./launch/tab-mode-arguments.js";
 import { createTabControlDecoder, type TabCommand } from "./control/tab-control-decoder.js";
 import { createSidecarView } from "./dashboard/sidecar-view.js";
+import { createStartupBrandLine, renderStartupBrandFrame } from "./dashboard/startup-brand-view.js";
 import { createTabStripView } from "./dashboard/tab-strip-view.js";
 import { addTabBar, computeSingleSessionLayout, type SingleSessionLayout } from "./layout/single-session-layout.js";
 import { createProviderUsageAdapter } from "./providers/usage-adapter.js";
@@ -43,6 +44,7 @@ export interface ScreenOutputModel {
 export interface TabRenderState {
   readonly sessions: readonly ManagedSession[];
   readonly selectedSessionId: string | undefined;
+  readonly showStartupBranding: boolean;
 }
 
 export interface CliDependencies {
@@ -84,16 +86,19 @@ async function runSingleSessionCli(
   let inputSubscription: Disposable | undefined;
   let resizeSubscription: Disposable | undefined;
   let pendingRender = Promise.resolve();
+  let showStartupBranding = true;
 
   try {
     await dependencies.terminal.enter();
     entered = true;
     screen = dependencies.createScreenModel(layout.terminal);
     session = dependencies.createSession(launch, layout.terminal);
+    pendingRender = dependencies.terminal.render(renderStartupBrandFrame(selectedProvider, layoutWidth(layout))).catch(() => undefined);
 
     outputSubscription = session.onData((data) => {
       pendingRender = pendingRender.then(async () => {
         await screen?.write(data);
+        if (data.length > 0) showStartupBranding = false;
         await renderCurrentSnapshot();
       });
     });
@@ -147,6 +152,11 @@ async function runSingleSessionCli(
       return;
     }
 
+    if (showStartupBranding) {
+      await dependencies.terminal.render(renderStartupBrandFrame(selectedProvider, layoutWidth(layout))).catch(() => undefined);
+      return;
+    }
+
     const snapshot = screen.snapshot();
     let frame: string;
     try {
@@ -181,12 +191,17 @@ async function runTabbedCli(
   let pendingRender = Promise.resolve();
   let inputQueue = Promise.resolve();
   let lastExitCode = 0;
+  let showStartupBranding = true;
   let resolveComplete: (() => void) | undefined;
   const complete = new Promise<void>((resolve) => { resolveComplete = resolve; });
 
   const renderCurrent = async (): Promise<void> => {
     const selectedId = manager.selectedSessionId;
     const sessions = manager.sessions();
+    const firstSession = sessions[0];
+    if (showStartupBranding && (firstSession?.hasReceivedOutput === true || firstSession?.status !== "running")) {
+      showStartupBranding = false;
+    }
     const selected = selectedId === undefined
       ? sessions.at(-1)
       : sessions.find((session) => session.id === selectedId);
@@ -195,6 +210,7 @@ async function runTabbedCli(
       await dependencies.terminal.render(dependencies.renderSnapshot(selected.snapshot, layout, provider, {
         sessions,
         selectedSessionId: selectedId,
+        showStartupBranding,
       }));
     } catch {
       await dependencies.terminal.render(dependencies.renderFallbackSnapshot?.(selected.snapshot) ?? "");
@@ -301,7 +317,9 @@ export function createDefaultDependencies(): CliDependencies {
           : createSidecarView(usageAdapter.getUsageState(provider), layout.dashboard.columns, layout.terminal.rows);
         const tabBarLine = layout.tabBar === undefined || tabs === undefined
           ? undefined
-          : createTabStripView(tabs.sessions, tabs.selectedSessionId, provider, layout.tabBar.columns);
+          : tabs.showStartupBranding
+            ? createStartupBrandLine(provider, layout.tabBar.columns)
+            : createTabStripView(tabs.sessions, tabs.selectedSessionId, provider, layout.tabBar.columns);
         return sidecarRenderer.render(snapshot, layout, dashboardLines, tabBarLine);
       } catch {
         sidecarRenderer.reset();
@@ -324,6 +342,12 @@ function resolveLayout(outerSize: TerminalSize, dependencies: CliDependencies): 
 
 function resolveTabbedLayout(outerSize: TerminalSize, dependencies: CliDependencies): SingleSessionLayout {
   return addTabBar(resolveLayout(outerSize, dependencies), outerSize);
+}
+
+function layoutWidth(layout: SingleSessionLayout): number {
+  return layout.dashboard === undefined
+    ? layout.terminal.columns
+    : layout.dashboard.startColumn + layout.dashboard.columns - 1;
 }
 
 export function runDefaultCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {

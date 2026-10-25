@@ -103,7 +103,7 @@ describe("runCli", () => {
 
     await runCli(["codex"], dependencies);
 
-    expect(terminal.frames).toEqual(["resized frame"]);
+    expect(terminal.frames.at(-1)).toContain("TGX starting codex...");
   });
 
   it("keeps processing child output when the optional dashboard render fails", async () => {
@@ -120,7 +120,59 @@ describe("runCli", () => {
     await expect(runCli(["codex"], dependencies)).resolves.toBe(0);
 
     expect(screen.writes).toEqual(["child output"]);
-    expect(terminal.frames).toEqual(["child-only frame"]);
+    expect(terminal.frames.at(-1)).toBe("child-only frame");
+  });
+
+  it("shows TGX branding until the first single-session child output renders", async () => {
+    const events: string[] = [];
+    const session = new FakeSession(events, { exitCode: 0 }, "child output");
+    const terminal = new RecordingTerminal(events);
+    const dependencies = createDependencies(events, session, undefined, terminal);
+    dependencies.renderSnapshot = () => "child frame";
+
+    await expect(runCli(["codex"], dependencies)).resolves.toBe(0);
+
+    expect(terminal.frames).toEqual([
+      expect.stringContaining("TGX starting codex..."),
+      "child frame",
+    ]);
+  });
+
+  it("keeps a single-session startup indicator through resize before child output", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const terminal = new ManualResizeTerminal(events);
+    const dependencies = createDependencies(events, session, undefined, terminal);
+    dependencies.renderSnapshot = () => "child frame";
+
+    const running = runCli(["codex"], dependencies);
+    await waitFor(() => terminal.frames.length === 1);
+    terminal.emitResize({ columns: 120, rows: 40 });
+    await waitFor(() => terminal.frames.length === 2);
+    expect(terminal.frames.at(-1)).toContain("TGX starting codex...");
+
+    session.emitData("ready");
+    await waitFor(() => terminal.frames.at(-1) === "child frame");
+    session.emitExit({ exitCode: 0 });
+    await expect(running).resolves.toBe(0);
+  });
+
+  it("queues child output emitted while the startup frame is still rendering", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const screen = new FakeScreenModel();
+    const terminal = new DeferredStartupTerminal(events);
+    const dependencies = createDependencies(events, session, undefined, terminal, screen);
+    dependencies.renderSnapshot = () => "child frame";
+
+    const running = runCli(["codex"], dependencies);
+    await waitFor(() => terminal.frames.length === 1);
+    session.emitData("early output");
+    terminal.releaseStartupFrame();
+    await waitFor(() => screen.writes.includes("early output"));
+    session.emitExit({ exitCode: 0 });
+
+    await expect(running).resolves.toBe(0);
   });
 
   it("creates and closes opt-in tabs without changing the default provider arguments", async () => {
@@ -169,11 +221,46 @@ describe("runCli", () => {
       "claude",
       expect.objectContaining({
         selectedSessionId: undefined,
+        showStartupBranding: false,
         sessions: [expect.objectContaining({ status: "exited", exit: { exitCode: 3 } })],
       })
     );
   });
+
+  it("switches a tabbed startup indicator to normal tab state after first output", async () => {
+    const events: string[] = [];
+    const session = new ManualSession(events);
+    const dependencies = createDependencies(events, session);
+    const renderSnapshot = vi.fn(() => "tab frame");
+    dependencies.renderSnapshot = renderSnapshot;
+
+    const running = runCli(["codex", "--tgx-tabs"], dependencies);
+    await waitFor(() => renderSnapshot.mock.calls.length > 0);
+    expect(renderSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "codex",
+      expect.objectContaining({ showStartupBranding: true })
+    );
+
+    session.emitData("ready");
+    await waitFor(() => renderSnapshot.mock.calls.some((call) => {
+      const state = (call as unknown as readonly unknown[])[3] as { showStartupBranding?: boolean } | undefined;
+      return state?.showStartupBranding === false;
+    }));
+    session.emitExit({ exitCode: 0 });
+
+    await expect(running).resolves.toBe(0);
+  });
 });
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error("Condition was not met");
+}
 
 function createDependencies(
   events: string[],
@@ -288,6 +375,34 @@ class RecordingTerminal extends FakeTerminal {
   }
 }
 
+class ManualResizeTerminal extends RecordingTerminal {
+  #resizeListener: ((size: TerminalSize) => void) | undefined;
+
+  onResize(listener: (size: TerminalSize) => void): Disposable {
+    this.#resizeListener = listener;
+    return { dispose: () => { this.#resizeListener = undefined; } };
+  }
+
+  emitResize(size: TerminalSize): void {
+    this.#resizeListener?.(size);
+  }
+}
+
+class DeferredStartupTerminal extends RecordingTerminal {
+  #release: (() => void) | undefined;
+
+  override render(frame: string): Promise<void> {
+    this.frames.push(frame);
+    if (this.frames.length !== 1) return Promise.resolve();
+    return new Promise((resolve) => { this.#release = resolve; });
+  }
+
+  releaseStartupFrame(): void {
+    this.#release?.();
+    this.#release = undefined;
+  }
+}
+
 class ScriptedInputTerminal extends FakeTerminal {
   constructor(events: string[], private readonly script: string) {
     super(events);
@@ -321,4 +436,32 @@ class NaturallyExitingSession extends ControlledSession {
     queueMicrotask(() => listener(this.naturalExit));
     return { dispose() {} };
   }
+}
+
+class ManualSession implements CliSession {
+  #dataListener: ((data: string) => void) | undefined;
+  #exitListener: ((exit: SessionExit) => void) | undefined;
+
+  constructor(private readonly events: string[]) {}
+
+  onData(listener: (data: string) => void): Disposable {
+    this.#dataListener = listener;
+    return { dispose: () => { this.#dataListener = undefined; } };
+  }
+
+  onExit(listener: (exit: SessionExit) => void): Disposable {
+    this.#exitListener = listener;
+    return { dispose: () => { this.#exitListener = undefined; } };
+  }
+
+  write(_data: string): void {}
+  resize(_size: TerminalSize): void {}
+
+  async close(): Promise<SessionExit> {
+    this.events.push("session.close");
+    return { exitCode: 0 };
+  }
+
+  emitData(data: string): void { this.#dataListener?.(data); }
+  emitExit(exit: SessionExit): void { this.#exitListener?.(exit); }
 }

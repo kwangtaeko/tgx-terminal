@@ -40,6 +40,19 @@ describe("MultiSessionManager", () => {
 
     expect(manager.get(firstId)?.snapshot.lines).toEqual(["FIRST"]);
     expect(manager.get(secondId)?.snapshot.lines).toEqual(["SECOND"]);
+    expect(manager.get(firstId)?.hasReceivedOutput).toBe(true);
+    expect(manager.get(secondId)?.hasReceivedOutput).toBe(true);
+  });
+
+  it("does not treat an empty data event as rendered child output", async () => {
+    const session = new FakeSession();
+    const manager = createManager([session]);
+    const id = await manager.create(launch("first"));
+
+    session.emitData("");
+    await manager.flush();
+
+    expect(manager.get(id)?.hasReceivedOutput).toBe(false);
   });
 
   it("rejects selection of an unknown session and input without a selected session", () => {
@@ -97,7 +110,9 @@ describe("MultiSessionManager", () => {
     await manager.flush();
 
     expect(manager.get(firstId)?.status).toBe("error");
+    expect(manager.get(firstId)?.hasReceivedOutput).toBe(false);
     expect(manager.get(secondId)?.status).toBe("running");
+    expect(manager.get(secondId)?.hasReceivedOutput).toBe(true);
     expect(manager.get(secondId)?.snapshot.lines).toEqual(["visible"]);
   });
 

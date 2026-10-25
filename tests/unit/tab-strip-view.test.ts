@@ -31,6 +31,7 @@ function session(id: string, status: ManagedSession["status"]): ManagedSession {
   return {
     id,
     status,
+    hasReceivedOutput: false,
     snapshot: { columns: 1, rows: 1, lines: [], styledLines: [], cursor: { x: 0, y: 0 } },
   };
 }
