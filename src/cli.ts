@@ -6,6 +6,7 @@ import type { ChildLaunch, Provider } from "./launch/command.js";
 import { parseTabModeArguments } from "./launch/tab-mode-arguments.js";
 import { createTabControlDecoder, type TabCommand } from "./control/tab-control-decoder.js";
 import { createSidecarView } from "./dashboard/sidecar-view.js";
+import { createStatusLine } from "./dashboard/status-line-view.js";
 import { createStartupBrandLine, renderStartupBrandFrame } from "./dashboard/startup-brand-view.js";
 import { createTabStripView } from "./dashboard/tab-strip-view.js";
 import { addTabBar, computeSingleSessionLayout, type SingleSessionLayout } from "./layout/single-session-layout.js";
@@ -326,7 +327,17 @@ export function createDefaultDependencies(): CliDependencies {
           : tabs.showStartupBranding
             ? createStartupBrandLine(provider, layout.tabBar.columns)
             : createTabStripView(tabs.sessions, tabs.selectedSessionId, provider, layout.tabBar.columns);
-        return sidecarRenderer.render(snapshot, layout, dashboardLines, tabBarLine);
+        const selectedSession = tabs?.selectedSessionId === undefined
+          ? undefined
+          : tabs.sessions.find((session) => session.id === tabs.selectedSessionId);
+        const statusLine = layout.statusLine === undefined
+          ? undefined
+          : createStatusLine(
+              usageAdapter.getUsageState(provider),
+              selectedSession?.status === "exited" ? "exited" : "running",
+              layout.statusLine.columns
+            );
+        return sidecarRenderer.render(snapshot, layout, dashboardLines, tabBarLine, statusLine);
       } catch {
         sidecarRenderer.reset();
         return fallbackRenderer.render(snapshot);

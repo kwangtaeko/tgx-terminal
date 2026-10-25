@@ -28,9 +28,10 @@ export class SidecarRenderer {
     snapshot: ScreenSnapshot,
     layout: SingleSessionLayout,
     dashboardLines: readonly string[],
-    tabBarLine?: string
+    tabBarLine?: string,
+    statusLine?: string
   ): string {
-    const frame = createFrame(snapshot, layout, dashboardLines, tabBarLine);
+    const frame = createFrame(snapshot, layout, dashboardLines, tabBarLine, statusLine);
     const previous = this.#previousFrame;
     this.#previousFrame = frame;
 
@@ -48,7 +49,8 @@ function createFrame(
   snapshot: ScreenSnapshot,
   layout: SingleSessionLayout,
   dashboardLines: readonly string[],
-  tabBarLine: string | undefined
+  tabBarLine: string | undefined,
+  statusLine: string | undefined
 ): RenderedFrame {
   const rowOffset = layout.tabBar === undefined ? 0 : 1;
   const rows = layout.tabBar === undefined ? [] : [formatTabBarLine(tabBarLine ?? "", layout.tabBar.columns)];
@@ -66,9 +68,12 @@ function createFrame(
     const separatorColumn = layout.dashboard.startColumn - 1;
     return `${child}\u001b[${physicalRow};${separatorColumn}H|\u001b[${physicalRow};${layout.dashboard.startColumn}H${dashboard}`;
   }));
+  if (layout.statusLine !== undefined) {
+    rows.push(formatStatusLine(statusLine ?? "", layout.statusLine.columns));
+  }
 
   return {
-    geometry: `${layout.tabBar?.columns ?? layout.terminal.columns}x${rows.length}:${layout.dashboard?.startColumn ?? "hidden"}`,
+    geometry: `${layout.tabBar?.columns ?? layout.statusLine?.columns ?? layout.terminal.columns}x${rows.length}:${layout.dashboard?.startColumn ?? "hidden"}`,
     rows,
     cursor: {
       column: clamp(snapshot.cursor.x, layout.terminal.columns),
@@ -86,6 +91,10 @@ function formatDashboardLine(line: string, columns: number): string {
 }
 
 function formatTabBarLine(line: string, columns: number): string {
+  return line.replace(/[^\x20-\x7e]/g, "?").slice(0, columns).padEnd(columns, " ");
+}
+
+function formatStatusLine(line: string, columns: number): string {
   return line.replace(/[^\x20-\x7e]/g, "?").slice(0, columns).padEnd(columns, " ");
 }
 

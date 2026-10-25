@@ -16,11 +16,18 @@ export interface TabBarLayout {
   readonly columns: number;
 }
 
+export interface StatusLineLayout {
+  /** Width of the physical parent-terminal row owned by TGX. */
+  readonly columns: number;
+}
+
 export interface SingleSessionLayout {
   readonly terminal: TerminalSize;
   readonly dashboard: DashboardLayout | undefined;
   /** Present only when TGX reserves a row above the child terminal. */
   readonly tabBar?: TabBarLayout;
+  /** Present only when TGX reserves a row below the child terminal. */
+  readonly statusLine?: StatusLineLayout;
 }
 
 const MIN_SIDECAR_COLUMNS =
@@ -29,24 +36,20 @@ const MIN_SIDECAR_COLUMNS =
 export function computeSingleSessionLayout(outerSize: TerminalSize): SingleSessionLayout {
   const validatedOuterSize = validateTerminalSize(outerSize);
 
-  if (validatedOuterSize.columns < MIN_SIDECAR_COLUMNS) {
+  if (validatedOuterSize.rows < 2) {
     return {
       terminal: validatedOuterSize,
       dashboard: undefined,
     };
   }
 
-  const terminalColumns = validatedOuterSize.columns - DASHBOARD_GUTTER_COLUMNS - DASHBOARD_COLUMNS;
-
   return {
     terminal: {
-      columns: terminalColumns,
-      rows: validatedOuterSize.rows,
+      columns: validatedOuterSize.columns,
+      rows: validatedOuterSize.rows - 1,
     },
-    dashboard: {
-      columns: DASHBOARD_COLUMNS,
-      startColumn: terminalColumns + DASHBOARD_GUTTER_COLUMNS + 1,
-    },
+    dashboard: undefined,
+    statusLine: { columns: validatedOuterSize.columns },
   };
 }
 

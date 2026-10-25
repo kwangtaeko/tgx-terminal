@@ -62,7 +62,7 @@ describe("runCli", () => {
     expect(screen.resizeCalls).toEqual([{ columns: 120, rows: 40 }]);
   });
 
-  it("uses the sidecar child size at startup and restores the full width when the parent narrows", async () => {
+  it("uses the statusline child size at startup and preserves full width when the parent narrows", async () => {
     const events: string[] = [];
     const session = new FakeSession(events, { exitCode: 0 }, "child output");
     const screen = new FakeScreenModel();
@@ -85,10 +85,10 @@ describe("runCli", () => {
 
     await runCli(["codex"], dependencies);
 
-    expect(createdSessionSizes).toEqual([{ columns: 60, rows: 24 }]);
-    expect(createdScreenSizes).toEqual([{ columns: 60, rows: 24 }]);
-    expect(session.resizeCalls).toEqual([{ columns: 91, rows: 24 }]);
-    expect(screen.resizeCalls).toEqual([{ columns: 91, rows: 24 }]);
+    expect(createdSessionSizes).toEqual([{ columns: 92, rows: 23 }]);
+    expect(createdScreenSizes).toEqual([{ columns: 92, rows: 23 }]);
+    expect(session.resizeCalls).toEqual([{ columns: 91, rows: 23 }]);
+    expect(screen.resizeCalls).toEqual([{ columns: 91, rows: 23 }]);
     expect(renderSnapshot).toHaveBeenCalledWith(expect.anything(), computeSingleSessionLayout({ columns: 91, rows: 24 }), "codex");
   });
 
@@ -219,10 +219,10 @@ describe("runCli", () => {
     await expect(runCli(["codex", "--tgx-tabs", "--model", "gpt test"], dependencies)).resolves.toBe(0);
 
     expect(events.filter((event) => event === "session.close")).toHaveLength(2);
-    expect(createdSizes).toEqual([{ columns: 60, rows: 23 }, { columns: 60, rows: 23 }]);
+    expect(createdSizes).toEqual([{ columns: 92, rows: 22 }, { columns: 92, rows: 22 }]);
     expect(renderSnapshot).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ terminal: { columns: 60, rows: 23 }, tabBar: { columns: 92 } }),
+      expect.objectContaining({ terminal: { columns: 92, rows: 22 }, statusLine: { columns: 92 }, tabBar: { columns: 92 } }),
       "codex",
       expect.objectContaining({ selectedSessionId: "session-1" })
     );

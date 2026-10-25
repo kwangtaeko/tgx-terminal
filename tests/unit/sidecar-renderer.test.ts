@@ -86,6 +86,25 @@ describe("SidecarRenderer", () => {
     expect(renderer.render(initial, sidecarLayout, ["TGX STATUS", ""])).toMatch(/\u001b\[2;60H\u001b\[\?25h$/u);
     expect(renderer.render(cursorMoved, sidecarLayout, ["TGX STATUS", ""])).toBe("\u001b[0m\u001b[1;1H\u001b[?25h");
   });
+
+  it("renders a background-free TGX statusline below the child viewport", () => {
+    const renderer = new SidecarRenderer();
+    const layout: SingleSessionLayout = {
+      terminal: { columns: 60, rows: 2 },
+      dashboard: undefined,
+      statusLine: { columns: 60 },
+    };
+    const rendered = renderer.render(
+      snapshotWithLines(["child one", "child two"], 60, undefined, { x: 4, y: 1 }),
+      layout,
+      [],
+      undefined,
+      "TGX | CODEX 0.164.0 | SESSION RUNNING"
+    );
+
+    expect(rendered).toContain("\u001b[3;1H\u001b[2KTGX | CODEX 0.164.0 | SESSION RUNNING");
+    expect(rendered).toMatch(/\u001b\[0m\u001b\[2;5H\u001b\[\?25h$/u);
+  });
 });
 
 function snapshotWithLines(
