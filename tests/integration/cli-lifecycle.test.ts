@@ -103,7 +103,7 @@ describe("runCli", () => {
 
     await runCli(["codex"], dependencies);
 
-    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
+    expect(terminal.frames.at(-1)).toContain("\u001b[1;38;5;195mTGX");
   });
 
   it("keeps processing child output when the optional dashboard render fails", async () => {
@@ -133,7 +133,7 @@ describe("runCli", () => {
     await expect(runCli(["codex"], dependencies)).resolves.toBe(0);
 
     expect(terminal.frames).toEqual([
-      expect.stringContaining("TTTTTT  GGGGG  XX   XX"),
+      expect.stringContaining("\u001b[1;38;5;195mTGX"),
       "child frame",
     ]);
   });
@@ -152,7 +152,7 @@ describe("runCli", () => {
     await waitFor(() => screen.writes.length === 1);
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(terminal.frames).toHaveLength(1);
-    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
+    expect(terminal.frames.at(-1)).toContain("\u001b[1;38;5;195mTGX");
 
     session.emitData("visible");
     await waitFor(() => terminal.frames.at(-1) === "child frame");
@@ -171,7 +171,7 @@ describe("runCli", () => {
     await waitFor(() => terminal.frames.length === 1);
     terminal.emitResize({ columns: 120, rows: 40 });
     await waitFor(() => terminal.frames.length === 2);
-    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
+    expect(terminal.frames.at(-1)).toContain("\u001b[1;38;5;195mTGX");
 
     session.emitData("ready");
     await waitFor(() => terminal.frames.at(-1) === "child frame");
