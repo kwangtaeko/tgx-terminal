@@ -93,17 +93,18 @@ export class MultiSessionManager {
     return { dispose: () => this.#changeListeners.delete(listener) };
   }
 
-  async create(launch: ChildLaunch): Promise<string> {
+  async create(launch: ChildLaunch, size?: TerminalSize): Promise<string> {
     if (this.#sessions.size >= this.#maximumSessions) {
       throw new Error(`Maximum session count reached: ${this.#maximumSessions}`);
     }
 
+    const sessionSize = size === undefined ? this.#size : validateTerminalSize(size);
     const id = `session-${this.#nextId}`;
-    const port = this.#createSession(launch, this.#size);
+    const port = this.#createSession(launch, sessionSize);
     let screen: ManagedScreen | undefined;
     let record: SessionRecord | undefined;
     try {
-      screen = this.#createScreenModel(this.#size);
+      screen = this.#createScreenModel(sessionSize);
       record = {
         id,
         port,
@@ -173,6 +174,22 @@ export class MultiSessionManager {
       } catch {
         this.#markError(record);
       }
+    }
+    this.#notifyChange();
+  }
+
+  /** Resizes one running PTY/VT pair without changing the default tab size. */
+  resizeSession(id: string, size: TerminalSize): void {
+    const record = this.#sessions.get(id);
+    if (record === undefined) throw new Error(`Unknown session: ${id}`);
+    const validatedSize = validateTerminalSize(size);
+    if (record.status !== "running") return;
+    try {
+      record.port.resize(validatedSize);
+      record.screen.resize(validatedSize);
+    } catch {
+      this.#markError(record);
+      return;
     }
     this.#notifyChange();
   }

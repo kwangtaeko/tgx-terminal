@@ -2,6 +2,7 @@
 
 | 일시 | 명령 | 기대 결과 | 실제 결과 | 판정 |
 | --- | --- | --- | --- | --- |
+| 2026-10-25 | `pnpm.cmd exec vitest run tests/unit/multi-session-manager.test.ts; pnpm.cmd typecheck; pnpm.cmd exec vitest run; pnpm.cmd build; git diff --check` | P3 pane별 custom create·target resize·기본 size 보존·종료 session validation·오류 격리 검증 | manager 17개 및 전체 20개 파일·93개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; split CLI·pane focus·실제 PTY 분할 화면은 후속 단계 |
 | 2026-10-25 | `pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P3 parsed snapshot 2-pane renderer의 좌우·상하 배치, 행 단위 diff/reset, geometry 거부 검증 | 20개 파일, 90개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; pane PTY lifecycle·resize·focus/input·실제 분할 화면은 후속 단계 |
 | 2026-10-25 | `pnpm.cmd exec vitest run; pnpm.cmd typecheck; pnpm.cmd build; git diff --check` | P3 선행 단계의 순수 2-pane geometry: 좌우·상하·최소 경계·narrow fallback·잘못된 orientation 검증 | 19개 파일, 85개 테스트 통과; typecheck/build exit 0; `git diff --check` clean | pass; PTY 생성·pane renderer·focus/input·실제 분할 화면 검증은 후속 단계 |
 | 2026-10-25 | `node dist/cli.js codex --version` | 실제 Windows PTY에서 단일 세션 TGX 시작 표시·Codex 출력·alternate screen 복구 확인 | `TGX starting codex...` 표시 후 Codex `0.164.0`, exit 0, cursor/alternate screen 복구 | pass; 대화형 한글 IME·붙여넣기·승인 메뉴·resize는 수동 확인 대기 |

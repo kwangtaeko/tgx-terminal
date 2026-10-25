@@ -212,6 +212,54 @@ describe("MultiSessionManager", () => {
     expect(healthy.resizes).toEqual([{ columns: 120, rows: 40 }]);
   });
 
+  it("creates pane sessions at custom sizes without changing the default size", async () => {
+    const first = new FakeSession();
+    const second = new FakeSession();
+    const third = new FakeSession();
+    const creationSizes: TerminalSize[] = [];
+    const screenCreationSizes: TerminalSize[] = [];
+    const manager = createManager([first, second, third], [], 1_024, creationSizes, 3, screenCreationSizes);
+
+    await manager.create(launch("first"), { columns: 40, rows: 24 });
+    await manager.create(launch("second"), { columns: 50, rows: 24 });
+    await manager.create(launch("third"));
+
+    expect(creationSizes).toEqual([
+      { columns: 40, rows: 24 },
+      { columns: 50, rows: 24 },
+      { columns: 80, rows: 24 },
+    ]);
+    expect(screenCreationSizes).toEqual(creationSizes);
+  });
+
+  it("resizes only the requested running session and isolates its resize failure", async () => {
+    const failing = new FakeSession(undefined, new Error("pane resize failed"));
+    const healthy = new FakeSession();
+    const screens: FakeScreen[] = [];
+    const manager = createManager([failing, healthy], screens);
+    const failingId = await manager.create(launch("failing"), { columns: 40, rows: 24 });
+    const healthyId = await manager.create(launch("healthy"), { columns: 40, rows: 24 });
+
+    manager.resizeSession(healthyId, { columns: 50, rows: 24 });
+    manager.resizeSession(failingId, { columns: 41, rows: 24 });
+
+    expect(healthy.resizes).toEqual([{ columns: 50, rows: 24 }]);
+    expect(screens[1]?.resizes).toEqual([{ columns: 50, rows: 24 }]);
+    expect(manager.get(failingId)?.status).toBe("error");
+    expect(screens[0]?.resizes).toEqual([]);
+    expect(() => manager.resizeSession("session-404", { columns: 40, rows: 24 })).toThrow("Unknown session");
+  });
+
+  it("validates a requested pane size before skipping an exited session", async () => {
+    const session = new FakeSession();
+    const manager = createManager([session]);
+    const id = await manager.create(launch("exited"));
+    session.emitExit({ exitCode: 0 });
+
+    expect(() => manager.resizeSession(id, { columns: 0, rows: 24 })).toThrow(RangeError);
+    expect(session.resizes).toEqual([]);
+  });
+
   it("notifies changes without letting a listener interrupt session work", async () => {
     const session = new FakeSession();
     const manager = createManager([session]);
@@ -231,21 +279,26 @@ describe("MultiSessionManager", () => {
 function createManager(
   sessions: FakeSession[],
   suppliedScreens: FakeScreen[] = [],
-  maximumQueuedOutputBytes = 1_024
+  maximumQueuedOutputBytes = 1_024,
+  creationSizes: TerminalSize[] | undefined = undefined,
+  maximumSessions = 2,
+  screenCreationSizes: TerminalSize[] | undefined = undefined
 ): MultiSessionManager {
   let sessionIndex = 0;
   let screenIndex = 0;
   return new MultiSessionManager({
     size: { columns: 80, rows: 24 },
-    maximumSessions: 2,
+    maximumSessions,
     maximumQueuedOutputBytes,
-    createSession: () => {
+    createSession: (_launch, size) => {
+      creationSizes?.push(size);
       const session = sessions[sessionIndex];
       sessionIndex += 1;
       if (session === undefined) throw new Error("Unexpected session creation");
       return session;
     },
-    createScreenModel: () => {
+    createScreenModel: (size) => {
+      screenCreationSizes?.push(size);
       const screen = suppliedScreens[screenIndex] ?? new FakeScreen();
       if (suppliedScreens[screenIndex] === undefined) suppliedScreens.push(screen);
       screenIndex += 1;
