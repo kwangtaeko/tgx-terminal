@@ -7,12 +7,24 @@ export function createStartupBrandLine(provider: Provider, columns: number): str
 
 /** Produces the initial full frame for a single-session TGX startup. */
 export function renderStartupBrandFrame(provider: Provider, columns: number, availableRows = 3): string {
-  const badgeRows = [
+  const compactRows = [
     "+-----+  TGX / TERMINAL",
     `| TGX |  CONNECTING TO ${provider.toUpperCase()}`,
     "+-----+  SAFE PTY SESSION",
   ];
-  const visibleRows = badgeRows.slice(0, Number.isSafeInteger(availableRows) && availableRows > 0 ? availableRows : 1);
+  const wordmarkRows = [
+    "TTTTTT  GGGGG  XX   XX",
+    "  TT   GG        XX XX ",
+    "  TT   GG  GGG    XXX  ",
+    "  TT   GG   GG   XX XX ",
+    "  TT    GGGGG  XX   XX",
+    "",
+    `      CONNECTING TO ${provider.toUpperCase()}`,
+    "      SAFE PTY SESSION",
+  ];
+  const safeRows = Number.isSafeInteger(availableRows) && availableRows > 0 ? availableRows : 1;
+  const badgeRows = safeRows >= 7 ? wordmarkRows : compactRows;
+  const visibleRows = badgeRows.slice(0, safeRows);
   const renderedRows = visibleRows
     .map((row, index) => `\u001b[${index + 1};1H\u001b[2K${fitPrintableAscii(row, columns)}`)
     .join("");

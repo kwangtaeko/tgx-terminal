@@ -20,6 +20,10 @@ TGX가 provider CLI 위에 단순 문구만 덧붙인 래퍼처럼 보이지 않
 - 별도의 animation timer를 만들지 않는다. 정지 상태에서도 깜빡임 없이 안전한 시작 배지만 보여 준다.
 - 시작 frame은 child viewport 높이를 받아 최대 3행만 그리며, 1~2행 terminal에서 화면 밖 행으로 이동하지 않는다.
 
+## 블록형 워드마크 확장
+
+사용자는 시작 시 입체적인 TGX 글자 형태를 요청했다. viewport가 7행 이상이면 5행 block ASCII `TGX` 워드마크, 빈 구분 행, `CONNECTING TO <PROVIDER>`를 표시한다. 8행에서는 `SAFE PTY SESSION`까지 표시한다. 1~6행은 기존 3행 compact badge로 축소해 provider 입력 영역을 보존한다.
+
 ## 검증
 
 - 80열 기본 frame에 세 줄과 provider 대문자 상태가 존재한다.

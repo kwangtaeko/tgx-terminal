@@ -103,7 +103,7 @@ describe("runCli", () => {
 
     await runCli(["codex"], dependencies);
 
-    expect(terminal.frames.at(-1)).toContain("TGX / TERMINAL");
+    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
   });
 
   it("keeps processing child output when the optional dashboard render fails", async () => {
@@ -133,7 +133,7 @@ describe("runCli", () => {
     await expect(runCli(["codex"], dependencies)).resolves.toBe(0);
 
     expect(terminal.frames).toEqual([
-      expect.stringContaining("TGX / TERMINAL"),
+      expect.stringContaining("TTTTTT  GGGGG  XX   XX"),
       "child frame",
     ]);
   });
@@ -149,7 +149,7 @@ describe("runCli", () => {
     await waitFor(() => terminal.frames.length === 1);
     terminal.emitResize({ columns: 120, rows: 40 });
     await waitFor(() => terminal.frames.length === 2);
-    expect(terminal.frames.at(-1)).toContain("TGX / TERMINAL");
+    expect(terminal.frames.at(-1)).toContain("TTTTTT  GGGGG  XX   XX");
 
     session.emitData("ready");
     await waitFor(() => terminal.frames.at(-1) === "child frame");

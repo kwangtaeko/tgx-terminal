@@ -28,4 +28,26 @@ describe("startup branding view", () => {
     expect(frame).not.toContain("\u001b[2;1H");
     expect(frame).not.toContain("\u001b[3;1H");
   });
+
+  it("renders a large TGX wordmark when the terminal has enough height", () => {
+    const frame = renderStartupBrandFrame("codex", 80, 8);
+    const compactFrame = renderStartupBrandFrame("codex", 80, 3);
+
+    expect(frame).toContain("\u001b[1;1H\u001b[2KTTTTTT  GGGGG  XX   XX");
+    expect(frame).toContain("\u001b[5;1H\u001b[2K  TT    GGGGG  XX   XX");
+    expect(frame).toContain("\u001b[7;1H\u001b[2K      CONNECTING TO CODEX");
+    expect(frame).not.toContain("| TGX |");
+    expect(compactFrame).toContain("| TGX |  CONNECTING TO CODEX");
+  });
+
+  it("switches from the compact badge to the wordmark at seven rows", () => {
+    const sevenRows = renderStartupBrandFrame("claude", 80, 7);
+    const sixRows = renderStartupBrandFrame("claude", 80, 6);
+
+    expect(sevenRows).toContain("TTTTTT  GGGGG  XX   XX");
+    expect(sevenRows).toContain("\u001b[7;1H\u001b[2K      CONNECTING TO CLAUDE");
+    expect(sevenRows).not.toContain("\u001b[8;1H");
+    expect(sixRows).toContain("| TGX |  CONNECTING TO CLAUDE");
+    expect(sixRows).not.toContain("TTTTTT  GGGGG  XX   XX");
+  });
 });

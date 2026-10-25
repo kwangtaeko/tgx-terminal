@@ -38,3 +38,13 @@
 - [x] focused/full test·typecheck·build를 실행하고 커밋한다.
 
 Ruling: 독립 리뷰에서 1행 terminal의 화면 밖 cursor 이동을 확인했다. `renderStartupBrandFrame`에 optional viewport height를 추가하고 `cli.ts`가 `layout.terminal.rows`를 전달한다. 높이를 모르는 직접 호출은 기존 3행 배지로 유지한다.
+
+### Task 2: 높이 반응형 TGX 워드마크
+
+**Files:**
+- Modify: `src/dashboard/startup-brand-view.ts`
+- Modify: `tests/unit/startup-brand-view.test.ts`
+
+- [x] 8행 viewport에서 5행 block ASCII `TGX`와 연결 상태, 3행 viewport의 compact fallback 및 7/6행 경계를 테스트로 정의한다.
+- [x] 기존 3행 badge가 반환하는 RED를 확인한다.
+- [x] 7행 이상 wordmark·1~6행 compact 행 선택을 구현하고 focused test/typecheck를 통과시킨다.
