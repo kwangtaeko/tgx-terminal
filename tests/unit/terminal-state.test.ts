@@ -70,4 +70,29 @@ describe("ProcessTerminal", () => {
 
     expect(sizes).toEqual([{ columns: 120, rows: 40 }]);
   });
+
+  it("waits for stdout to drain before resolving a rendered frame", async () => {
+    let drainListener: (() => void) | undefined;
+    const input = {
+      resume: () => undefined,
+      on: () => undefined,
+      off: () => undefined
+    };
+    const output = {
+      write: () => false,
+      once: (event: "drain", listener: () => void) => {
+        if (event === "drain") drainListener = listener;
+      }
+    };
+    const terminal = new ProcessTerminal(input, output);
+    let completed = false;
+
+    const rendering = terminal.render("stream frame").then(() => { completed = true; });
+    await Promise.resolve();
+
+    expect(completed).toBe(false);
+    drainListener?.();
+    await rendering;
+    expect(completed).toBe(true);
+  });
 });

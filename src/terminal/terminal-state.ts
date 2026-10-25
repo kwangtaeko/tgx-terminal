@@ -23,6 +23,7 @@ interface OutputStream {
   readonly columns?: number;
   readonly rows?: number;
   write(data: string): boolean;
+  once?(event: "drain", listener: () => void): void;
   on?(event: "resize", listener: () => void): void;
   off?(event: "resize", listener: () => void): void;
 }
@@ -61,7 +62,10 @@ export class ProcessTerminal implements InputCapableTerminal, ResizableTerminal 
   }
 
   async render(frame: string): Promise<void> {
-    this.output.write(frame);
+    if (frame === "" || this.output.write(frame) || this.output.once === undefined) {
+      return;
+    }
+    await new Promise<void>((resolve) => this.output.once?.("drain", resolve));
   }
 
   async restore(): Promise<void> {

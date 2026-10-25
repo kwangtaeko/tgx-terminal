@@ -19,17 +19,21 @@ const unsupportedCodexState: ProviderUsageState = {
 };
 
 describe("createSidecarView", () => {
-  it("renders a bounded, safe summary for unsupported usage", () => {
+  it("renders TGX-owned sections for unsupported usage without inventing usage values", () => {
     const lines = createSidecarView(unsupportedCodexState, 30, 12);
     const rendered = lines.join("\n");
 
     expect(lines).toHaveLength(12);
     expect(lines.every((line) => line.length === 30)).toBe(true);
-    expect(rendered).toContain("TGX STATUS");
-    expect(rendered).toContain("Provider: codex");
-    expect(rendered).toContain("CLI: 0.164.0");
-    expect(rendered).toContain("Status: Unsupported");
-    expect(rendered).toContain("Source: help.openai.com");
+    expect(rendered).toContain("TGX / TERMINAL");
+    expect(rendered).toContain("[ SESSION ]");
+    expect(rendered).toContain("PROVIDER  codex");
+    expect(rendered).toContain("CLI       0.164.0");
+    expect(rendered).toContain("[ USAGE SIGNAL ]");
+    expect(rendered).toContain("STATE     Unsupported");
+    expect(rendered).toContain("SOURCE    help.openai.com");
+    expect(rendered).toContain("LOCAL STATE ONLY");
+    expect(rendered).not.toContain("TGX STATUS");
     expect(rendered).not.toContain("0%");
     expect(rendered).not.toContain("Reset:");
     expect(rendered).not.toContain("This internal explanation");
@@ -38,6 +42,6 @@ describe("createSidecarView", () => {
   it("truncates rows to the available width and height", () => {
     const lines = createSidecarView(unsupportedCodexState, 12, 3);
 
-    expect(lines).toEqual(["TGX STATUS  ", "            ", "Provider: co"]);
+    expect(lines).toEqual(["TGX / TERMIN", "------------", "[ SESSION ] "]);
   });
 });

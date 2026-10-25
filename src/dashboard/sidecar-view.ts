@@ -14,14 +14,18 @@ export function createSidecarView(
 
   const usage = state.usage;
   const content = [
-    "TGX STATUS",
+    "TGX / TERMINAL",
+    "------------------------------",
+    "[ SESSION ]",
+    `  PROVIDER  ${state.provider}`,
+    `  CLI       ${usage.source.providerVersion}`,
     "",
-    `Provider: ${state.provider}`,
-    `CLI: ${usage.source.providerVersion}`,
+    "[ USAGE SIGNAL ]",
+    `  STATE     ${formatStatus(usage.status)}`,
+    `  SOURCE    ${documentationHost(usage.source.documentationUrl)}`,
     "",
-    "Usage",
-    `Status: ${formatStatus(usage.status)}`,
-    `Source: ${documentationHost(usage.source.documentationUrl)}`,
+    "[ PRIVACY ]",
+    "  LOCAL STATE ONLY",
   ];
 
   return Array.from({ length: rows }, (_, index) => formatRow(content[index] ?? "", columns));
