@@ -93,7 +93,9 @@ async function runSingleSessionCli(
     entered = true;
     screen = dependencies.createScreenModel(layout.terminal);
     session = dependencies.createSession(launch, layout.terminal);
-    pendingRender = dependencies.terminal.render(renderStartupBrandFrame(selectedProvider, layoutWidth(layout))).catch(() => undefined);
+    pendingRender = dependencies.terminal.render(
+      renderStartupBrandFrame(selectedProvider, layoutWidth(layout), layout.terminal.rows)
+    ).catch(() => undefined);
 
     outputSubscription = session.onData((data) => {
       pendingRender = pendingRender.then(async () => {
@@ -153,7 +155,9 @@ async function runSingleSessionCli(
     }
 
     if (showStartupBranding) {
-      await dependencies.terminal.render(renderStartupBrandFrame(selectedProvider, layoutWidth(layout))).catch(() => undefined);
+      await dependencies.terminal.render(
+        renderStartupBrandFrame(selectedProvider, layoutWidth(layout), layout.terminal.rows)
+      ).catch(() => undefined);
       return;
     }
 
